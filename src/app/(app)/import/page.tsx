@@ -1,0 +1,193 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useOrgDataContext } from "@/contexts/OrgDataContext";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import {
+  LEGACY_IMPORT_META,
+  LEGACY_NOTES_IMPORT,
+  type LegacyImportRow,
+} from "@/data/legacy-notes-import";
+import { bulkImportTransactions, parseImportJson } from "@/lib/bulk-import";
+import { formatDate, formatMoney } from "@/lib/utils";
+
+export default function ImportPage() {
+  const { orgId, user } = useAuth();
+  const { accounts, categories } = useOrgDataContext();
+  const [accountName, setAccountName] = useState("Готівка");
+  const [customAccountId, setCustomAccountId] = useState("");
+  const [jsonText, setJsonText] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const preview = LEGACY_NOTES_IMPORT;
+  const reviewRows = useMemo(() => preview.filter((r) => r.needsReview), [preview]);
+
+  const runImport = async (rows: LegacyImportRow[]) => {
+    if (!orgId || !user) return;
+    setRunning(true);
+    setError(null);
+    setStatus(null);
+    setProgress(null);
+    try {
+      const result = await bulkImportTransactions({
+        orgId,
+        createdBy: user.uid,
+        accountId: customAccountId || undefined,
+        accountName,
+        accounts,
+        categories,
+        rows,
+        onProgress: (done, total) => setProgress({ done, total }),
+      });
+
+      const parts = [`Імпортовано ${result.imported} операцій.`];
+      if (result.accountCreated) parts.push(`Створено рахунок «${accountName}».`);
+      if (result.categoriesCreated.length) {
+        parts.push(`Нові категорії: ${result.categoriesCreated.join(", ")}.`);
+      }
+      setStatus(parts.join(" "));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Помилка імпорту");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const importNotes = () => runImport(LEGACY_NOTES_IMPORT);
+
+  const importJson = () => {
+    try {
+      const rows = parseImportJson(jsonText);
+      runImport(rows);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Невірний JSON");
+    }
+  };
+
+  if (!orgId) return null;
+
+  return (
+    <div className="space-y-6">
+      <header>
+        <h1 className="text-2xl font-bold">Імпорт записів</h1>
+        <p className="text-sm text-muted mt-1">
+          Перенесіть старі нотатки в Firestore одним натисканням
+        </p>
+      </header>
+
+      <Card title="Ваші нотатки (вже розібрані)">
+        <p className="text-sm text-slate-700 mb-3">
+          {LEGACY_IMPORT_META.rowCount} витрат на суму{" "}
+          <strong>{formatMoney(LEGACY_IMPORT_META.totalExpenses)}</strong>.
+          {LEGACY_IMPORT_META.reviewCount > 0 && (
+            <>
+              {" "}
+              <span className="text-amber-700">
+                {LEGACY_IMPORT_META.reviewCount} запис(и) варто перевірити після імпорту.
+              </span>
+            </>
+          )}
+        </p>
+        {reviewRows.length > 0 && (
+          <ul className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg p-3 mb-3 space-y-1">
+            {reviewRows.map((r, i) => (
+              <li key={i}>
+                {formatMoney(r.amount)} — {r.description}
+                {r.comment ? ` (${r.comment})` : ""}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-xs text-muted mb-4">
+          Не імпортується: «Мастив лотки бригада11» — сума не вказана.
+        </p>
+
+        <div className="grid gap-3 sm:grid-cols-2 max-w-lg mb-4">
+          {accounts.length > 0 ? (
+            <Select
+              label="Рахунок для всіх операцій"
+              value={customAccountId}
+              onChange={(e) => setCustomAccountId(e.target.value)}
+            >
+              <option value="">Створити / використати «{accountName}»</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <Select
+              label="Рахунок (буде створено, якщо немає)"
+              value={accountName}
+              onChange={(e) => setAccountName(e.target.value)}
+            >
+              <option value="Готівка">Готівка</option>
+              <option value="Карта">Карта</option>
+              <option value="ФОП">ФОП</option>
+            </Select>
+          )}
+        </div>
+
+        <Button onClick={importNotes} disabled={running}>
+          {running ? "Імпорт..." : "Імпортувати ці записи"}
+        </Button>
+        {progress && (
+          <p className="text-sm text-muted mt-2">
+            {progress.done} / {progress.total}
+          </p>
+        )}
+      </Card>
+
+      <Card title="Або вставте свій JSON">
+        <p className="text-xs text-muted mb-2">
+          Формат: масив обʼєктів з полями type, date (yyyy-MM-dd), amount, category,
+          description, опційно comment.
+        </p>
+        <textarea
+          className="w-full min-h-32 rounded-lg border border-border p-3 text-sm font-mono"
+          value={jsonText}
+          onChange={(e) => setJsonText(e.target.value)}
+          placeholder='[{"type":"expense","date":"2026-06-01","amount":500,"category":"Обіди","description":"..."}]'
+        />
+        <Button className="mt-3" variant="secondary" onClick={importJson} disabled={running || !jsonText.trim()}>
+          Імпортувати JSON
+        </Button>
+      </Card>
+
+      <Card title="Попередній перегляд (перші 15)">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-muted border-b">
+                <th className="py-1 pr-2">Дата</th>
+                <th className="py-1 pr-2">Сума</th>
+                <th className="py-1 pr-2">Категорія</th>
+                <th className="py-1">Опис</th>
+              </tr>
+            </thead>
+            <tbody>
+              {preview.slice(0, 15).map((r, i) => (
+                <tr key={i} className="border-b border-border/50">
+                  <td className="py-1 pr-2 whitespace-nowrap">{r.date}</td>
+                  <td className="py-1 pr-2">{formatMoney(r.amount)}</td>
+                  <td className="py-1 pr-2">{r.category}</td>
+                  <td className="py-1">{r.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {status && <p className="text-sm text-income">{status}</p>}
+      {error && <p className="text-sm text-expense">{error}</p>}
+    </div>
+  );
+}
