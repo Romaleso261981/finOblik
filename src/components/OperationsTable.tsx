@@ -158,9 +158,6 @@ export function OperationsTable({
   return (
     <>
       <div className="overflow-x-auto rounded-xl border border-border">
-        <p className="text-xs text-muted px-3 py-2 bg-slate-50 border-b border-border">
-          Натисніть на рядок, щоб переглянути деталі та редагувати або видалити операцію.
-        </p>
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-600">
             <tr>
