@@ -5,6 +5,7 @@ const variants = {
     "bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50",
   secondary:
     "bg-white border border-border text-slate-700 hover:bg-slate-50 disabled:opacity-50",
+  edit: "bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100 disabled:opacity-50",
   danger: "bg-expense text-white hover:bg-red-700 disabled:opacity-50",
   ghost: "text-slate-600 hover:bg-slate-100",
 };

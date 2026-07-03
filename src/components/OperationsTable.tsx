@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
@@ -9,6 +9,88 @@ import { deleteTransaction, updateTransaction } from "@/lib/firestore";
 import { formatDate, formatDateInput, formatMoney } from "@/lib/utils";
 import { buildCategoryDisplayMap } from "@/lib/categories";
 import type { Account, Category, Transaction } from "@/types";
+
+type SortColumn = "date" | "type" | "amount" | "account" | "category" | "description";
+type SortDirection = "asc" | "desc";
+
+function SortableHeader({
+  label,
+  column,
+  activeColumn,
+  direction,
+  onSort,
+  className = "",
+}: {
+  label: string;
+  column: SortColumn;
+  activeColumn: SortColumn;
+  direction: SortDirection;
+  onSort: (column: SortColumn) => void;
+  className?: string;
+}) {
+  const active = activeColumn === column;
+  return (
+    <th className={`px-3 py-2 font-medium ${className}`}>
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={`inline-flex items-center gap-1 hover:text-slate-900 ${
+          active ? "text-slate-900" : ""
+        }`}
+        aria-sort={active ? (direction === "asc" ? "ascending" : "descending") : "none"}
+      >
+        <span>{label}</span>
+        {active && (
+          <span className="text-brand-600 text-xs leading-none" aria-hidden>
+            {direction === "asc" ? "▲" : "▼"}
+          </span>
+        )}
+      </button>
+    </th>
+  );
+}
+
+function sortTransactions(
+  rows: Transaction[],
+  column: SortColumn,
+  direction: SortDirection,
+  accountMap: Record<string, string>,
+  categoryMap: Record<string, string>
+): Transaction[] {
+  const dir = direction === "asc" ? 1 : -1;
+  const sorted = [...rows];
+  sorted.sort((a, b) => {
+    let cmp = 0;
+    switch (column) {
+      case "date":
+        cmp = a.date.getTime() - b.date.getTime();
+        break;
+      case "type":
+        cmp = a.type.localeCompare(b.type, "uk");
+        break;
+      case "amount":
+        cmp = a.amount - b.amount;
+        break;
+      case "account":
+        cmp = (accountMap[a.accountId] ?? "").localeCompare(accountMap[b.accountId] ?? "", "uk");
+        break;
+      case "category":
+        cmp = (categoryMap[a.categoryId ?? ""] ?? "").localeCompare(
+          categoryMap[b.categoryId ?? ""] ?? "",
+          "uk"
+        );
+        break;
+      case "description": {
+        const da = a.type === "income" ? a.transferredBy ?? "" : a.description ?? "";
+        const db = b.type === "income" ? b.transferredBy ?? "" : b.description ?? "";
+        cmp = da.localeCompare(db, "uk");
+        break;
+      }
+    }
+    return cmp * dir;
+  });
+  return sorted;
+}
 
 export function OperationsTable({
   transactions,
@@ -21,13 +103,53 @@ export function OperationsTable({
   categories: Category[];
   orgId: string;
 }) {
+  const [selected, setSelected] = useState<Transaction | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
-  const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
-  const categoryMap = buildCategoryDisplayMap(categories);
+  const [deleting, setDeleting] = useState<Transaction | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<SortColumn>("date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
-  const handleDelete = async (t: Transaction) => {
-    if (!confirm("Видалити цю операцію?")) return;
-    await deleteTransaction(orgId, t.id);
+  const accountMap = useMemo(
+    () => Object.fromEntries(accounts.map((a) => [a.id, a.name])),
+    [accounts]
+  );
+  const categoryMap = useMemo(() => buildCategoryDisplayMap(categories), [categories]);
+
+  const sortedTransactions = useMemo(
+    () => sortTransactions(transactions, sortColumn, sortDirection, accountMap, categoryMap),
+    [transactions, sortColumn, sortDirection, accountMap, categoryMap]
+  );
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColumn(column);
+      setSortDirection(column === "date" ? "desc" : "asc");
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleting) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await deleteTransaction(orgId, deleting.id);
+      setDeleting(null);
+      setSelected(null);
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Не вдалося видалити");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const closeDeleteModal = () => {
+    if (deleteLoading) return;
+    setDeleting(null);
+    setDeleteError(null);
   };
 
   if (!transactions.length) {
@@ -39,21 +161,72 @@ export function OperationsTable({
   return (
     <>
       <div className="overflow-x-auto rounded-xl border border-border">
+        <p className="text-xs text-muted px-3 py-2 bg-slate-50 border-b border-border">
+          Натисніть на рядок, щоб переглянути деталі та редагувати або видалити операцію.
+        </p>
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-600">
             <tr>
-              <th className="px-3 py-2 font-medium">Дата</th>
-              <th className="px-3 py-2 font-medium">Тип</th>
-              <th className="px-3 py-2 font-medium">Сума</th>
-              <th className="px-3 py-2 font-medium">Рахунок</th>
-              <th className="px-3 py-2 font-medium">Категорія</th>
-              <th className="px-3 py-2 font-medium">Опис / хто перекинув</th>
-              <th className="px-3 py-2 font-medium w-28"></th>
+              <SortableHeader
+                label="Дата"
+                column="date"
+                activeColumn={sortColumn}
+                direction={sortDirection}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Тип"
+                column="type"
+                activeColumn={sortColumn}
+                direction={sortDirection}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Сума"
+                column="amount"
+                activeColumn={sortColumn}
+                direction={sortDirection}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Рахунок"
+                column="account"
+                activeColumn={sortColumn}
+                direction={sortDirection}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Категорія"
+                column="category"
+                activeColumn={sortColumn}
+                direction={sortDirection}
+                onSort={handleSort}
+              />
+              <SortableHeader
+                label="Опис / хто перекинув"
+                column="description"
+                activeColumn={sortColumn}
+                direction={sortDirection}
+                onSort={handleSort}
+              />
             </tr>
           </thead>
           <tbody>
-            {transactions.map((t) => (
-              <tr key={t.id} className="border-t border-border">
+            {sortedTransactions.map((t) => (
+              <tr
+                key={t.id}
+                className="border-t border-border cursor-pointer hover:bg-brand-50/60 transition-colors"
+                onClick={() => setSelected(t)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelected(t);
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-label="Відкрити деталі операції"
+              >
                 <td className="px-3 py-2 whitespace-nowrap">{formatDate(t.date)}</td>
                 <td className="px-3 py-2">
                   <span
@@ -76,25 +249,28 @@ export function OperationsTable({
                     ? t.transferredBy ?? "—"
                     : t.description ?? "—"}
                 </td>
-                <td className="px-3 py-2">
-                  <div className="flex gap-1">
-                    <Button variant="ghost" className="px-2 py-1" onClick={() => setEditing(t)}>
-                      Ред.
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="px-2 py-1 text-expense"
-                      onClick={() => handleDelete(t)}
-                    >
-                      Вид.
-                    </Button>
-                  </div>
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {selected && (
+        <TransactionDetailModal
+          transaction={selected}
+          accountMap={accountMap}
+          categoryMap={categoryMap}
+          onClose={() => setSelected(null)}
+          onEdit={() => {
+            setEditing(selected);
+            setSelected(null);
+          }}
+          onDelete={() => {
+            setDeleting(selected);
+            setSelected(null);
+          }}
+        />
+      )}
 
       {editing && (
         <EditTransactionModal
@@ -105,7 +281,110 @@ export function OperationsTable({
           onClose={() => setEditing(null)}
         />
       )}
+
+      {deleting && (
+        <Modal open title="Видалити операцію?" onClose={closeDeleteModal}>
+          <div className="space-y-4">
+            <p className="text-sm text-slate-700">
+              Цю дію <strong>не можна скасувати</strong>. Запис буде остаточно видалено з обліку.
+            </p>
+            <div className="rounded-lg border border-border bg-slate-50 px-3 py-3 text-sm space-y-1">
+              <p>
+                <span className="text-muted">Дата: </span>
+                {formatDate(deleting.date)}
+              </p>
+              <p>
+                <span className="text-muted">Тип: </span>
+                {deleting.type === "income" ? "Надходження" : "Витрата"}
+              </p>
+              <p>
+                <span className="text-muted">Сума: </span>
+                <span className="font-medium">{formatMoney(deleting.amount)}</span>
+              </p>
+            </div>
+            {deleteError && <p className="text-sm text-expense">{deleteError}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={closeDeleteModal} disabled={deleteLoading}>
+                Скасувати
+              </Button>
+              <Button variant="danger" onClick={handleDeleteConfirm} disabled={deleteLoading}>
+                {deleteLoading ? "Видалення…" : "Так, видалити"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:gap-3 py-2 border-b border-border last:border-0">
+      <dt className="text-muted text-sm sm:w-40 shrink-0">{label}</dt>
+      <dd className="text-sm text-slate-900 font-medium">{value}</dd>
+    </div>
+  );
+}
+
+function TransactionDetailModal({
+  transaction,
+  accountMap,
+  categoryMap,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  transaction: Transaction;
+  accountMap: Record<string, string>;
+  categoryMap: Record<string, string>;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const isIncome = transaction.type === "income";
+
+  return (
+    <Modal open title="Деталі операції" onClose={onClose}>
+      <dl className="mb-6">
+        <DetailRow label="Дата" value={formatDate(transaction.date)} />
+        <DetailRow
+          label="Тип"
+          value={
+            <span className={isIncome ? "text-income" : "text-expense"}>
+              {isIncome ? "Надходження" : "Витрата"}
+            </span>
+          }
+        />
+        <DetailRow label="Сума" value={formatMoney(transaction.amount)} />
+        <DetailRow label="Рахунок" value={accountMap[transaction.accountId] ?? "—"} />
+        {!isIncome && (
+          <DetailRow
+            label="Категорія"
+            value={
+              transaction.categoryId ? categoryMap[transaction.categoryId] ?? "—" : "—"
+            }
+          />
+        )}
+        {isIncome ? (
+          <DetailRow label="Хто перекинув" value={transaction.transferredBy ?? "—"} />
+        ) : (
+          <DetailRow label="Опис" value={transaction.description ?? "—"} />
+        )}
+        <DetailRow label="Коментар" value={transaction.comment?.trim() ? transaction.comment : "—"} />
+      </dl>
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2 border-t border-border">
+        <Button variant="secondary" onClick={onClose} className="sm:min-w-[7rem]">
+          Закрити
+        </Button>
+        <Button variant="edit" onClick={onEdit} className="sm:min-w-[7rem]">
+          Редагувати
+        </Button>
+        <Button variant="danger" onClick={onDelete} className="sm:min-w-[7rem]">
+          Видалити
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
