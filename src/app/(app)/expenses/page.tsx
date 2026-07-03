@@ -8,14 +8,23 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { CategoryPicker, resolveExpenseCategoryId } from "@/components/CategoryPicker";
-import { createCategory, createExpense } from "@/lib/firestore";
+import { SupplierModal } from "@/components/SupplierModal";
+import {
+  createCategory,
+  createExpense,
+  createSupplierCategory,
+} from "@/lib/firestore";
 import { mapFirebaseError } from "@/lib/firebase-errors";
 import {
+  findPublicProcurementCategory,
   findSalaryCategory,
-  getChildCategories,
-  getRootCategories,
+  isPublicProcurementRootCategory,
+  isSalaryRootCategory,
+  PUBLIC_PROCUREMENT_CATEGORY_NAME,
+  rootNeedsSubcategory,
   SALARY_CATEGORY_NAME,
 } from "@/lib/categories";
+import type { SupplierProfile } from "@/types";
 import { formatDateInput } from "@/lib/utils";
 import Link from "next/link";
 
@@ -35,8 +44,11 @@ export default function ExpensesPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [addingEmployee, setAddingEmployee] = useState(false);
+  const [supplierModalOpen, setSupplierModalOpen] = useState(false);
+  const [addingSupplier, setAddingSupplier] = useState(false);
 
   const salaryCategory = useMemo(() => findSalaryCategory(categories), [categories]);
+  const publicProcurement = useMemo(() => findPublicProcurementCategory(categories), [categories]);
 
   const addRootCategory = async () => {
     if (!newCategory.trim()) return;
@@ -75,6 +87,27 @@ export default function ExpensesPage() {
     }
   };
 
+  const saveSupplier = async (profile: SupplierProfile) => {
+    if (!orgId) throw new Error("Організація не підключена");
+    setAddingSupplier(true);
+    setError(null);
+    try {
+      let rootId = publicProcurement?.id;
+      if (!rootId) {
+        rootId = await createCategory(orgId, PUBLIC_PROCUREMENT_CATEGORY_NAME);
+      }
+      const id = await createSupplierCategory(orgId, rootId, profile);
+      setParentCategoryId(rootId);
+      setSubCategoryId(id);
+      setSupplierModalOpen(false);
+      setMessage("Постачальника додано");
+    } catch (e) {
+      throw e instanceof Error ? e : new Error(mapFirebaseError(e));
+    } finally {
+      setAddingSupplier(false);
+    }
+  };
+
   const onParentCategoryChange = (id: string) => {
     setParentCategoryId(id);
     setSubCategoryId("");
@@ -96,21 +129,26 @@ export default function ExpensesPage() {
       if (!parentCategoryId) throw new Error("Оберіть категорію");
 
       const categoryId = resolveExpenseCategoryId(categories, parentCategoryId, subCategoryId);
-      const children = getChildCategories(categories, parentCategoryId);
-      const parent = getRootCategories(categories).find((c) => c.id === parentCategoryId);
-      const isSalary =
-        parent &&
-        parent.name.localeCompare(SALARY_CATEGORY_NAME, "uk", { sensitivity: "accent" }) === 0;
 
-      if ((children.length > 0 || isSalary) && !subCategoryId) {
-        throw new Error(isSalary ? "Оберіть або додайте працівника" : "Оберіть підкатегорію");
+      if (rootNeedsSubcategory(categories, parentCategoryId) && !subCategoryId) {
+        const isSalary = isSalaryRootCategory(categories, parentCategoryId);
+        const isProcurement = isPublicProcurementRootCategory(categories, parentCategoryId);
+        if (isSalary) throw new Error("Оберіть або додайте працівника");
+        if (isProcurement) throw new Error("Оберіть або додайте постачальника");
+        throw new Error("Оберіть підкатегорію");
       }
       if (!categoryId) throw new Error("Оберіть категорію");
 
+      const isSalary = isSalaryRootCategory(categories, parentCategoryId);
+      const isProcurement = isPublicProcurementRootCategory(categories, parentCategoryId);
       let desc = description.trim();
       if (!desc && isSalary && subCategoryId) {
         const emp = categories.find((c) => c.id === subCategoryId);
         desc = emp ? `Зарплата ${emp.name}` : "Зарплата";
+      }
+      if (!desc && isProcurement && subCategoryId) {
+        const supplier = categories.find((c) => c.id === subCategoryId);
+        desc = supplier ? `Публічна закупка, ${supplier.name}` : "Публічна закупка";
       }
       if (!desc) throw new Error("Додайте опис витрати");
 
@@ -189,10 +227,11 @@ export default function ExpensesPage() {
             onNewEmployeeNameChange={setNewEmployee}
             onAddEmployee={ensureSalaryAndAddEmployee}
             addingEmployee={addingEmployee}
+            onOpenAddSupplier={() => setSupplierModalOpen(true)}
           />
           <Input
             label="Опис"
-            placeholder="Для зарплати можна залишити порожнім — підставиться автоматично"
+            placeholder="Для зарплати чи публічної закупки можна залишити порожнім"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
@@ -217,6 +256,13 @@ export default function ExpensesPage() {
           </Button>
         </form>
       </Card>
+
+      <SupplierModal
+        open={supplierModalOpen}
+        onClose={() => setSupplierModalOpen(false)}
+        onSubmit={saveSupplier}
+        saving={addingSupplier}
+      />
     </div>
   );
 }

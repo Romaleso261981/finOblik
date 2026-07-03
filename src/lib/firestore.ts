@@ -15,7 +15,8 @@ import {
   getFirebaseDb,
   transactionsCollection,
 } from "./firebase";
-import { mapDoc, timestampToDate, type Account, type Category, type Transaction } from "@/types";
+import { mapDoc, timestampToDate, type Account, type Category, type SupplierProfile, type Transaction } from "@/types";
+import { supplierDisplayName } from "@/lib/categories";
 
 function mapAccount(snap: Parameters<typeof mapDoc<Account>>[0]): Account {
   return mapDoc(snap, (data) => ({
@@ -25,11 +26,25 @@ function mapAccount(snap: Parameters<typeof mapDoc<Account>>[0]): Account {
 }
 
 function mapCategory(snap: Parameters<typeof mapDoc<Category>>[0]): Category {
-  return mapDoc(snap, (data) => ({
-    name: data.name,
-    parentId: (data.parentId as string | undefined) ?? null,
-    createdAt: timestampToDate(data.createdAt),
-  }));
+  return mapDoc(snap, (data) => {
+    const supplierRaw = data.supplier as Record<string, unknown> | undefined;
+    const supplier =
+      supplierRaw && typeof supplierRaw === "object"
+        ? {
+            firstName: String(supplierRaw.firstName ?? ""),
+            lastName: String(supplierRaw.lastName ?? ""),
+            displayName: String(supplierRaw.displayName ?? ""),
+            location: String(supplierRaw.location ?? ""),
+            phone: String(supplierRaw.phone ?? ""),
+          }
+        : undefined;
+    return {
+      name: data.name,
+      parentId: (data.parentId as string | undefined) ?? null,
+      createdAt: timestampToDate(data.createdAt),
+      supplier,
+    };
+  });
 }
 
 function mapTransaction(snap: Parameters<typeof mapDoc<Transaction>>[0]): Transaction {
@@ -116,6 +131,27 @@ export async function createCategory(
   const ref = await addDoc(collection(getFirebaseDb(), categoriesCollection(orgId)), {
     name: name.trim(),
     parentId: parentId ?? null,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function createSupplierCategory(
+  orgId: string,
+  parentCategoryId: string,
+  supplier: SupplierProfile
+): Promise<string> {
+  const name = supplierDisplayName(supplier);
+  const ref = await addDoc(collection(getFirebaseDb(), categoriesCollection(orgId)), {
+    name,
+    parentId: parentCategoryId,
+    supplier: {
+      firstName: supplier.firstName.trim(),
+      lastName: supplier.lastName.trim(),
+      displayName: supplier.displayName.trim(),
+      location: supplier.location.trim(),
+      phone: supplier.phone.trim(),
+    },
     createdAt: serverTimestamp(),
   });
   return ref.id;

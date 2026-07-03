@@ -33,11 +33,21 @@ export interface Account {
   createdAt: Date;
 }
 
+export interface SupplierProfile {
+  firstName: string;
+  lastName: string;
+  /** Як звертатись / відображати в списках */
+  displayName: string;
+  location: string;
+  phone: string;
+}
+
 export interface Category {
   id: string;
   name: string;
   parentId: string | null;
   createdAt: Date;
+  supplier?: SupplierProfile;
 }
 
 export interface Transaction {

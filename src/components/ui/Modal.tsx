@@ -60,12 +60,14 @@ export function Modal({
         onClick={onClose}
       />
       <div
-        className={`absolute inset-x-0 flex justify-center pointer-events-none ${
-          sheet ? "bottom-0 sm:inset-0 sm:items-center sm:p-4" : "inset-0 items-center p-4"
+        className={`absolute inset-0 flex pointer-events-none ${
+          sheet
+            ? "bottom-0 flex-col justify-end sm:inset-0 sm:flex-row sm:items-center sm:justify-center sm:p-4"
+            : "items-center justify-center p-4"
         }`}
       >
         <div
-          className={`pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden bg-white shadow-xl border border-border min-h-0 ${
+          className={`pointer-events-auto grid w-full max-w-lg grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-white shadow-xl border border-border ${
             sheet
               ? "max-h-[min(85dvh,640px)] rounded-t-2xl sm:rounded-xl pb-[env(safe-area-inset-bottom)]"
               : "max-h-[min(calc(100dvh-2rem),640px)] rounded-xl"
@@ -83,7 +85,7 @@ export function Modal({
               ✕
             </Button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
+          <div className="min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
             <div className="p-4">{children}</div>
           </div>
         </div>
