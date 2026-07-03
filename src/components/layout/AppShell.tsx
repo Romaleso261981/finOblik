@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { PageHeaderProvider, usePageHeaderContext } from "@/contexts/PageHeaderContext";
 
 const nav = [
   { href: "/dashboard", label: "Огляд" },
@@ -57,7 +58,27 @@ export function AppShell({
   email?: string;
   onLogout: () => void;
 }) {
+  return (
+    <PageHeaderProvider>
+      <AppShellInner onLogout={onLogout} email={email}>
+        {children}
+      </AppShellInner>
+    </PageHeaderProvider>
+  );
+}
+
+function AppShellInner({
+  children,
+  onLogout,
+  email,
+}: {
+  children: ReactNode;
+  email?: string;
+  onLogout: () => void;
+}) {
   const pathname = usePathname();
+  const headerCtx = usePageHeaderContext();
+  const headerActions = headerCtx?.actions;
   const [menuOpen, setMenuOpen] = useState(false);
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
@@ -128,6 +149,7 @@ export function AppShell({
           <p className="text-xs text-muted truncate">ФінОблік</p>
           <p className="text-sm font-semibold text-slate-900 truncate">{currentPage}</p>
         </div>
+        {headerActions && <div className="shrink-0">{headerActions}</div>}
       </header>
 
       {/* Mobile drawer */}
@@ -173,9 +195,16 @@ export function AppShell({
         </div>
       )}
 
-      <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-8 max-w-6xl w-full mx-auto pb-[max(1rem,env(safe-area-inset-bottom))]">
-        {children}
-      </main>
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="hidden md:flex sticky top-0 z-30 items-center justify-between gap-4 border-b border-border bg-surface/95 backdrop-blur px-8 py-4">
+          <h1 className="text-xl font-bold text-slate-900 truncate">{currentPage}</h1>
+          {headerActions && <div className="shrink-0">{headerActions}</div>}
+        </div>
+
+        <main className="flex-1 min-w-0 p-4 sm:p-6 md:px-8 md:py-6 max-w-6xl w-full mx-auto pb-[max(1rem,env(safe-area-inset-bottom))]">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

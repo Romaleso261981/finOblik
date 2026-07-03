@@ -10,7 +10,7 @@ import { formatDate, formatDateInput, formatMoney } from "@/lib/utils";
 import { buildCategoryDisplayMap } from "@/lib/categories";
 import type { Account, Category, Transaction } from "@/types";
 
-type SortColumn = "date" | "type" | "amount" | "account" | "category" | "description";
+type SortColumn = "date" | "amount" | "account" | "category" | "description";
 type SortDirection = "asc" | "desc";
 
 function SortableHeader({
@@ -64,9 +64,6 @@ function sortTransactions(
     switch (column) {
       case "date":
         cmp = a.date.getTime() - b.date.getTime();
-        break;
-      case "type":
-        cmp = a.type.localeCompare(b.type, "uk");
         break;
       case "amount":
         cmp = a.amount - b.amount;
@@ -175,13 +172,6 @@ export function OperationsTable({
                 onSort={handleSort}
               />
               <SortableHeader
-                label="Тип"
-                column="type"
-                activeColumn={sortColumn}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-              <SortableHeader
                 label="Сума"
                 column="amount"
                 activeColumn={sortColumn}
@@ -228,16 +218,11 @@ export function OperationsTable({
                 aria-label="Відкрити деталі операції"
               >
                 <td className="px-3 py-2 whitespace-nowrap">{formatDate(t.date)}</td>
-                <td className="px-3 py-2">
-                  <span
-                    className={
-                      t.type === "income" ? "text-income font-medium" : "text-expense font-medium"
-                    }
-                  >
-                    {t.type === "income" ? "Надходження" : "Витрата"}
-                  </span>
-                </td>
-                <td className="px-3 py-2 font-medium whitespace-nowrap">
+                <td
+                  className={`px-3 py-2 font-semibold whitespace-nowrap tabular-nums ${
+                    t.type === "income" ? "text-income" : "text-expense"
+                  }`}
+                >
                   {formatMoney(t.amount)}
                 </td>
                 <td className="px-3 py-2">{accountMap[t.accountId] ?? "—"}</td>

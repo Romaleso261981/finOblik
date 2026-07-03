@@ -31,6 +31,7 @@ export function TransactionFiltersTrigger({
   showTransferredBy = true,
   showType = true,
   className = "",
+  compact = false,
 }: {
   filters: TransactionFilters;
   onApply: (f: TransactionFilters) => void;
@@ -39,6 +40,7 @@ export function TransactionFiltersTrigger({
   showTransferredBy?: boolean;
   showType?: boolean;
   className?: string;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<TransactionFilters>(filters);
@@ -66,7 +68,9 @@ export function TransactionFiltersTrigger({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 ${className}`}
+        className={`inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-white text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 ${
+          compact ? "relative h-10 w-10 shrink-0 p-0" : "px-3 py-2"
+        } ${className}`}
         aria-label={
           activeCount > 0
             ? `Фільтри, застосовано ${activeCount}`
@@ -74,9 +78,13 @@ export function TransactionFiltersTrigger({
         }
       >
         <FilterIcon />
-        <span>Фільтри</span>
+        {!compact && <span>Фільтри</span>}
         {activeCount > 0 && (
-          <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-brand-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+          <span
+            className={`inline-flex min-w-[1.125rem] items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold text-white ${
+              compact ? "absolute -top-1 -right-1 h-[1.125rem]" : "px-1.5 py-0.5 text-xs"
+            }`}
+          >
             {activeCount}
           </span>
         )}

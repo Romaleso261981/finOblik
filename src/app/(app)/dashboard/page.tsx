@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrgDataContext } from "@/contexts/OrgDataContext";
+import { usePageHeaderActions } from "@/contexts/PageHeaderContext";
 import { Card } from "@/components/ui/Card";
 import { TransactionFiltersTrigger } from "@/components/TransactionFiltersTrigger";
 import {
@@ -45,6 +46,20 @@ export default function DashboardPage() {
     [filtered, categoryNames]
   );
 
+  const headerFilters = useMemo(
+    () => (
+      <TransactionFiltersTrigger
+        filters={filters}
+        onApply={setFilters}
+        accounts={accounts}
+        categories={categories}
+      />
+    ),
+    [filters, accounts, categories]
+  );
+
+  usePageHeaderActions(headerFilters);
+
   if (!orgId) return null;
 
   if (loading) {
@@ -53,20 +68,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Огляд</h1>
-          <p className="text-sm text-muted mt-1">Підсумки з урахуванням обраних фільтрів</p>
-        </div>
-        <TransactionFiltersTrigger
-          filters={filters}
-          onApply={setFilters}
-          accounts={accounts}
-          categories={categories}
-          className="self-start shrink-0"
-        />
-      </header>
-
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <p className="text-xs text-muted uppercase tracking-wide">Надходження</p>
