@@ -3,6 +3,7 @@
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import type { Account, Category, TransactionFilters } from "@/types";
+import { formatCategoryPath, getRootCategories } from "@/lib/categories";
 
 export function TransactionFiltersPanel({
   filters,
@@ -71,11 +72,18 @@ export function TransactionFiltersPanel({
         }
       >
         <option value="">Усі категорії</option>
-        {categories.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
+        {getRootCategories(categories).map((root) => (
+          <option key={root.id} value={root.id}>
+            {root.name} (усі)
           </option>
         ))}
+        {categories
+          .filter((c) => c.parentId)
+          .map((c) => (
+            <option key={c.id} value={c.id}>
+              {formatCategoryPath(categories, c.id)}
+            </option>
+          ))}
       </Select>
       {showTransferredBy && (
         <Input

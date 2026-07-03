@@ -27,6 +27,7 @@ function mapAccount(snap: Parameters<typeof mapDoc<Account>>[0]): Account {
 function mapCategory(snap: Parameters<typeof mapDoc<Category>>[0]): Category {
   return mapDoc(snap, (data) => ({
     name: data.name,
+    parentId: (data.parentId as string | undefined) ?? null,
     createdAt: timestampToDate(data.createdAt),
   }));
 }
@@ -107,9 +108,14 @@ export async function deleteAccount(orgId: string, accountId: string) {
   await deleteDoc(doc(getFirebaseDb(), accountsCollection(orgId), accountId));
 }
 
-export async function createCategory(orgId: string, name: string): Promise<string> {
+export async function createCategory(
+  orgId: string,
+  name: string,
+  parentId: string | null = null
+): Promise<string> {
   const ref = await addDoc(collection(getFirebaseDb(), categoriesCollection(orgId)), {
     name: name.trim(),
+    parentId: parentId ?? null,
     createdAt: serverTimestamp(),
   });
   return ref.id;

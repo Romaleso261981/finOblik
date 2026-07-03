@@ -1,14 +1,21 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrgDataContext } from "@/contexts/OrgDataContext";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { CategoryPicker, resolveExpenseCategoryId } from "@/components/CategoryPicker";
 import { createCategory, createExpense } from "@/lib/firestore";
 import { mapFirebaseError } from "@/lib/firebase-errors";
+import {
+  findSalaryCategory,
+  getChildCategories,
+  getRootCategories,
+  SALARY_CATEGORY_NAME,
+} from "@/lib/categories";
 import { formatDateInput } from "@/lib/utils";
 import Link from "next/link";
 
@@ -17,7 +24,9 @@ export default function ExpensesPage() {
   const { accounts, categories } = useOrgDataContext();
   const [date, setDate] = useState(formatDateInput(new Date()));
   const [amount, setAmount] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+  const [parentCategoryId, setParentCategoryId] = useState("");
+  const [subCategoryId, setSubCategoryId] = useState("");
+  const [newEmployee, setNewEmployee] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [description, setDescription] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -25,8 +34,11 @@ export default function ExpensesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [addingEmployee, setAddingEmployee] = useState(false);
 
-  const addCategory = async () => {
+  const salaryCategory = useMemo(() => findSalaryCategory(categories), [categories]);
+
+  const addRootCategory = async () => {
     if (!newCategory.trim()) return;
     if (!orgId) {
       setError("Організація не підключена. Дивіться повідомлення зверху сторінки.");
@@ -42,6 +54,32 @@ export default function ExpensesPage() {
     }
   };
 
+  const ensureSalaryAndAddEmployee = async () => {
+    if (!orgId || !newEmployee.trim()) return;
+    setAddingEmployee(true);
+    setError(null);
+    try {
+      let salaryId = salaryCategory?.id;
+      if (!salaryId) {
+        salaryId = await createCategory(orgId, SALARY_CATEGORY_NAME);
+      }
+      const id = await createCategory(orgId, newEmployee, salaryId);
+      setSubCategoryId(id);
+      setParentCategoryId(salaryId);
+      setNewEmployee("");
+      setMessage(`Працівника «${newEmployee.trim()}» додано`);
+    } catch (e) {
+      setError(mapFirebaseError(e));
+    } finally {
+      setAddingEmployee(false);
+    }
+  };
+
+  const onParentCategoryChange = (id: string) => {
+    setParentCategoryId(id);
+    setSubCategoryId("");
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -55,14 +93,34 @@ export default function ExpensesPage() {
     try {
       const num = parseFloat(amount);
       if (!accountId) throw new Error("Оберіть рахунок");
+      if (!parentCategoryId) throw new Error("Оберіть категорію");
+
+      const categoryId = resolveExpenseCategoryId(categories, parentCategoryId, subCategoryId);
+      const children = getChildCategories(categories, parentCategoryId);
+      const parent = getRootCategories(categories).find((c) => c.id === parentCategoryId);
+      const isSalary =
+        parent &&
+        parent.name.localeCompare(SALARY_CATEGORY_NAME, "uk", { sensitivity: "accent" }) === 0;
+
+      if ((children.length > 0 || isSalary) && !subCategoryId) {
+        throw new Error(isSalary ? "Оберіть або додайте працівника" : "Оберіть підкатегорію");
+      }
       if (!categoryId) throw new Error("Оберіть категорію");
-      if (!description.trim()) throw new Error("Додайте опис витрати");
+
+      let desc = description.trim();
+      if (!desc && isSalary && subCategoryId) {
+        const emp = categories.find((c) => c.id === subCategoryId);
+        desc = emp ? `Зарплата ${emp.name}` : "Зарплата";
+      }
+      if (!desc) throw new Error("Додайте опис витрати");
+
       if (Number.isNaN(num) || num <= 0) throw new Error("Вкажіть коректну суму");
+
       await createExpense(orgId, {
         date,
         amount: num,
         categoryId,
-        description,
+        description: desc,
         accountId,
         comment,
         createdBy: user.uid,
@@ -95,15 +153,15 @@ export default function ExpensesPage() {
         </p>
       )}
 
-      <Card title="Нова категорія (якщо немає в списку)">
+      <Card title="Нова категорія верхнього рівня">
         <div className="flex gap-2">
           <Input
-            placeholder="Назва категорії"
+            placeholder="Наприклад: Обіди, Матеріали"
             value={newCategory}
             onChange={(e) => setNewCategory(e.target.value)}
             className="flex-1"
           />
-          <Button type="button" variant="secondary" onClick={addCategory}>
+          <Button type="button" variant="secondary" onClick={addRootCategory}>
             Додати
           </Button>
         </div>
@@ -121,24 +179,22 @@ export default function ExpensesPage() {
             onChange={(e) => setAmount(e.target.value)}
             required
           />
-          <Select
-            label="Категорія витрати"
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            required
-          >
-            <option value="">Оберіть категорію</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
+          <CategoryPicker
+            categories={categories}
+            parentCategoryId={parentCategoryId}
+            subCategoryId={subCategoryId}
+            onParentChange={onParentCategoryChange}
+            onSubChange={setSubCategoryId}
+            newEmployeeName={newEmployee}
+            onNewEmployeeNameChange={setNewEmployee}
+            onAddEmployee={ensureSalaryAndAddEmployee}
+            addingEmployee={addingEmployee}
+          />
           <Input
             label="Опис"
+            placeholder="Для зарплати можна залишити порожнім — підставиться автоматично"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            required
           />
           <Select
             label="Рахунок оплати"

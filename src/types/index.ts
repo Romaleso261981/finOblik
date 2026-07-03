@@ -36,6 +36,7 @@ export interface Account {
 export interface Category {
   id: string;
   name: string;
+  parentId: string | null;
   createdAt: Date;
 }
 

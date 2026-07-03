@@ -15,8 +15,8 @@ export default function OperationsPage() {
   const [filters, setFilters] = useState<TransactionFilters>({ type: "all" });
 
   const filtered = useMemo(
-    () => applyTransactionFilters(transactions, filters),
-    [transactions, filters]
+    () => applyTransactionFilters(transactions, filters, categories),
+    [transactions, filters, categories]
   );
 
   if (!orgId) return null;

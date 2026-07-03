@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import type { Transaction, TransactionFilters } from "@/types";
+import type { Transaction, TransactionFilters, Category } from "@/types";
+import { categoryMatchesFilter } from "@/lib/categories";
 
 export function formatMoney(amount: number): string {
   return new Intl.NumberFormat("uk-UA", {
@@ -20,14 +21,22 @@ export function formatDateInput(date: Date): string {
 
 export function applyTransactionFilters(
   transactions: Transaction[],
-  filters: TransactionFilters
+  filters: TransactionFilters,
+  categories?: Category[]
 ): Transaction[] {
   return transactions.filter((t) => {
     if (filters.type && filters.type !== "all" && t.type !== filters.type) {
       return false;
     }
     if (filters.accountId && t.accountId !== filters.accountId) return false;
-    if (filters.categoryId && t.categoryId !== filters.categoryId) return false;
+    if (filters.categoryId) {
+      const matchDirect = t.categoryId === filters.categoryId;
+      const matchTree =
+        categories &&
+        t.categoryId &&
+        categoryMatchesFilter(categories, t.categoryId, filters.categoryId);
+      if (!matchDirect && !matchTree) return false;
+    }
     if (
       filters.transferredBy &&
       !(t.transferredBy ?? "")

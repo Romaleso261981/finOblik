@@ -12,6 +12,7 @@ import {
   formatMoney,
   sumByType,
 } from "@/lib/utils";
+import { buildCategoryDisplayMap } from "@/lib/categories";
 import type { TransactionFilters } from "@/types";
 
 export default function DashboardPage() {
@@ -20,8 +21,8 @@ export default function DashboardPage() {
   const [filters, setFilters] = useState<TransactionFilters>({ type: "all" });
 
   const filtered = useMemo(
-    () => applyTransactionFilters(transactions, filters),
-    [transactions, filters]
+    () => applyTransactionFilters(transactions, filters, categories),
+    [transactions, filters, categories]
   );
 
   const income = sumByType(filtered, "income");
@@ -34,7 +35,7 @@ export default function DashboardPage() {
   );
 
   const categoryNames = useMemo(
-    () => Object.fromEntries(categories.map((c) => [c.id, c.name])),
+    () => buildCategoryDisplayMap(categories),
     [categories]
   );
 

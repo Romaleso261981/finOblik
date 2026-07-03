@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { deleteTransaction, updateTransaction } from "@/lib/firestore";
 import { formatDate, formatDateInput, formatMoney } from "@/lib/utils";
+import { buildCategoryDisplayMap } from "@/lib/categories";
 import type { Account, Category, Transaction } from "@/types";
 
 export function OperationsTable({
@@ -22,7 +23,7 @@ export function OperationsTable({
 }) {
   const [editing, setEditing] = useState<Transaction | null>(null);
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
-  const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
+  const categoryMap = buildCategoryDisplayMap(categories);
 
   const handleDelete = async (t: Transaction) => {
     if (!confirm("Видалити цю операцію?")) return;
@@ -188,7 +189,7 @@ function EditTransactionModal({
             >
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {buildCategoryDisplayMap(categories)[c.id]}
                 </option>
               ))}
             </Select>
