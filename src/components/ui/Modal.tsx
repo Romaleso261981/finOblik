@@ -68,7 +68,7 @@ export function Modal({
           className={`pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden bg-white shadow-xl border border-border min-h-0 ${
             sheet
               ? "max-h-[min(85dvh,640px)] rounded-t-2xl sm:rounded-xl pb-[env(safe-area-inset-bottom)]"
-              : "max-h-[min(85dvh,640px)] rounded-xl"
+              : "max-h-[min(calc(100dvh-2rem),640px)] rounded-xl"
           }`}
           role="dialog"
           aria-modal

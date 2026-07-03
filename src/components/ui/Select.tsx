@@ -108,7 +108,7 @@ export function Select({
         </svg>
       </button>
 
-      <Modal open={open} title={label ?? "Оберіть варіант"} onClose={() => setOpen(false)} sheet>
+      <Modal open={open} title={label ?? "Оберіть варіант"} onClose={() => setOpen(false)}>
         <ul className="divide-y divide-border -mx-4">
           {selectable.map((opt) => {
             const active = opt.value === stringValue;
