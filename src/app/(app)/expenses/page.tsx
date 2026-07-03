@@ -150,6 +150,15 @@ export default function ExpensesPage() {
         const supplier = categories.find((c) => c.id === subCategoryId);
         desc = supplier ? `Публічна закупка, ${supplier.name}` : "Публічна закупка";
       }
+      if (!desc && subCategoryId) {
+        const sub = categories.find((c) => c.id === subCategoryId);
+        if (sub?.supplier) {
+          const parent = categories.find((c) => c.id === parentCategoryId);
+          desc = parent
+            ? `${parent.name}, ${sub.name}`
+            : `Закупка, ${sub.name}`;
+        }
+      }
       if (!desc) throw new Error("Додайте опис витрати");
 
       if (Number.isNaN(num) || num <= 0) throw new Error("Вкажіть коректну суму");

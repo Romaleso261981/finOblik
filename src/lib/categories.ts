@@ -19,6 +19,40 @@ export function getChildCategories(categories: Category[], parentId: string): Ca
     .sort((a, b) => a.name.localeCompare(b.name, "uk"));
 }
 
+/** Усі постачальники (дочірні категорії з профілем supplier, зазвичай під «Публічна закупка»). */
+export function getSupplierCategories(categories: Category[]): Category[] {
+  return categories
+    .filter((c) => c.supplier != null)
+    .sort((a, b) => a.name.localeCompare(b.name, "uk"));
+}
+
+/**
+ * Варіанти для поля підкатегорії у витратах:
+ * для звичайних груп (напр. «Кондиціонери») — підкатегорії + постачальники з довідника.
+ */
+export function getExpenseSubcategoryOptions(
+  categories: Category[],
+  parentCategoryId: string
+): Category[] {
+  if (isSalaryRootCategory(categories, parentCategoryId)) {
+    return getChildCategories(categories, parentCategoryId);
+  }
+  if (isPublicProcurementRootCategory(categories, parentCategoryId)) {
+    return getChildCategories(categories, parentCategoryId);
+  }
+
+  const direct = getChildCategories(categories, parentCategoryId);
+  const suppliers = getSupplierCategories(categories);
+  if (suppliers.length === 0) return direct;
+
+  const seen = new Set(direct.map((c) => c.id));
+  const merged = [...direct];
+  for (const s of suppliers) {
+    if (!seen.has(s.id)) merged.push(s);
+  }
+  return merged.sort((a, b) => a.name.localeCompare(b.name, "uk"));
+}
+
 export function findCategoryByName(
   categories: Category[],
   name: string,
@@ -66,7 +100,9 @@ export function rootNeedsSubcategory(
 ): boolean {
   if (isSalaryRootCategory(categories, parentCategoryId)) return true;
   if (isPublicProcurementRootCategory(categories, parentCategoryId)) return true;
-  return getChildCategories(categories, parentCategoryId).length > 0;
+  if (getChildCategories(categories, parentCategoryId).length > 0) return true;
+  if (getSupplierCategories(categories).length > 0) return true;
+  return false;
 }
 
 export function subcategoryPickerLabel(
@@ -75,6 +111,9 @@ export function subcategoryPickerLabel(
 ): string {
   if (isSalaryRootCategory(categories, parentCategoryId)) return "Працівник";
   if (isPublicProcurementRootCategory(categories, parentCategoryId)) return "Постачальник";
+  if (getSupplierCategories(categories).length > 0) {
+    return "Підкатегорія / постачальник";
+  }
   return "Підкатегорія";
 }
 

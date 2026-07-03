@@ -138,30 +138,22 @@ export default function CategoriesPage() {
     }
   };
 
-  const ensureAcBranch = async (): Promise<string> => {
-    let rootId = acRoot?.id;
-    if (!rootId) {
-      rootId = await createCategory(orgId!, AC_ROOT_CATEGORY_NAME);
-    }
-    let purchaseId = acPurchase?.id;
-    if (!purchaseId) {
-      purchaseId = await createCategory(orgId!, AC_PURCHASE_SUBCATEGORY_NAME, rootId);
-    }
-    return purchaseId;
-  };
-
-  const addSupplier = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!orgId || !supplierName.trim()) return;
+  const saveSupplier = async (profile: SupplierProfile) => {
+    if (!orgId) throw new Error("Організація не підключена");
+    setAddingSupplier(true);
     setError(null);
-    setMessage(null);
     try {
-      const purchaseId = await ensureAcBranch();
-      await createCategory(orgId, supplierName.trim(), purchaseId);
-      setSupplierName("");
+      let rootId = publicProcurement?.id;
+      if (!rootId) {
+        rootId = await createCategory(orgId, PUBLIC_PROCUREMENT_CATEGORY_NAME);
+      }
+      await createSupplierCategory(orgId, rootId, profile);
+      setSupplierModalOpen(false);
       setMessage("Постачальника додано");
     } catch (e) {
-      setError(mapFirebaseError(e));
+      throw e instanceof Error ? e : new Error(mapFirebaseError(e));
+    } finally {
+      setAddingSupplier(false);
     }
   };
 
@@ -189,31 +181,24 @@ export default function CategoriesPage() {
         </p>
       </header>
 
-      <Card title={`${AC_ROOT_CATEGORY_NAME} — ${AC_PURCHASE_SUBCATEGORY_NAME}`}>
-        <form onSubmit={addSupplier} className="flex flex-col sm:flex-row gap-2">
-          <Input
-            label="Постачальник кондиціонерів"
-            placeholder="Компанія або ПІБ"
-            value={supplierName}
-            onChange={(e) => setSupplierName(e.target.value)}
-            className="flex-1"
-            required
-          />
-          <div className="flex items-end">
-            <Button type="submit">Додати</Button>
-          </div>
-        </form>
+      <Card title={PUBLIC_PROCUREMENT_CATEGORY_NAME}>
+        <Button type="button" onClick={() => setSupplierModalOpen(true)}>
+          Додати постачальника
+        </Button>
         <p className="text-xs text-muted mt-2">
-          Створяться «{AC_ROOT_CATEGORY_NAME}» та «{AC_PURCHASE_SUBCATEGORY_NAME}», якщо їх ще немає.
+          Категорія «{PUBLIC_PROCUREMENT_CATEGORY_NAME}» створиться автоматично, якщо її ще немає.
         </p>
         {suppliers.length > 0 ? (
           <ul className="mt-4 divide-y divide-border">
             {suppliers.map((c) => (
-              <li key={c.id} className="flex items-center justify-between py-2 text-sm">
+              <li key={c.id} className="flex items-center justify-between py-2 text-sm gap-2">
                 <span>
-                  {AC_ROOT_CATEGORY_NAME} → {AC_PURCHASE_SUBCATEGORY_NAME} → {c.name}
+                  {PUBLIC_PROCUREMENT_CATEGORY_NAME} → {c.name}
+                  {c.supplier?.location ? (
+                    <span className="text-muted"> · {c.supplier.location}</span>
+                  ) : null}
                 </span>
-                <Button variant="ghost" className="text-expense px-2" onClick={() => remove(c.id)}>
+                <Button variant="ghost" className="text-expense px-2 shrink-0" onClick={() => remove(c.id)}>
                   Видалити
                 </Button>
               </li>
@@ -277,7 +262,7 @@ export default function CategoriesPage() {
           <div className="flex flex-col sm:flex-row gap-2">
             <Input
               label="Назва підкатегорії"
-              placeholder="Наприклад: Закупка, Монтаж"
+              placeholder="Наприклад: монтаж, доставка"
               value={subName}
               onChange={(e) => setSubName(e.target.value)}
               className="flex-1"
@@ -324,6 +309,13 @@ export default function CategoriesPage() {
           </ul>
         )}
       </Card>
+
+      <SupplierModal
+        open={supplierModalOpen}
+        onClose={() => setSupplierModalOpen(false)}
+        onSubmit={saveSupplier}
+        saving={addingSupplier}
+      />
     </div>
   );
 }

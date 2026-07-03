@@ -5,8 +5,9 @@ import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import {
-  getChildCategories,
+  getExpenseSubcategoryOptions,
   getRootCategories,
+  getSupplierCategories,
   isPublicProcurementRootCategory,
   isSalaryRootCategory,
   rootNeedsSubcategory,
@@ -50,7 +51,10 @@ export function CategoryPicker({
 }: Props) {
   const roots = useMemo(() => getRootCategories(categories), [categories]);
   const children = useMemo(
-    () => (parentCategoryId ? getChildCategories(categories, parentCategoryId) : []),
+    () =>
+      parentCategoryId
+        ? getExpenseSubcategoryOptions(categories, parentCategoryId)
+        : [],
     [categories, parentCategoryId]
   );
 
@@ -58,6 +62,7 @@ export function CategoryPicker({
   const isPublicProcurement = isPublicProcurementRootCategory(categories, parentCategoryId);
   const needsSub = rootNeedsSubcategory(categories, parentCategoryId);
   const subLabel = subcategoryPickerLabel(categories, parentCategoryId);
+  const hasSuppliers = getSupplierCategories(categories).length > 0;
 
   const renderInlineCreate = (cfg: InlineCreate | undefined) => {
     if (!cfg) return null;
@@ -100,7 +105,9 @@ export function CategoryPicker({
       ? children.length > 0
         ? "Оберіть постачальника"
         : "Постачальників ще немає"
-      : "Оберіть підкатегорію";
+      : hasSuppliers
+        ? "Оберіть підкатегорію або постачальника"
+        : "Оберіть підкатегорію";
 
   return (
     <div className="space-y-3">
@@ -135,6 +142,12 @@ export function CategoryPicker({
           </Select>
 
           {isPublicProcurement && onOpenAddSupplier && (
+            <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={onOpenAddSupplier}>
+              Додати постачальника
+            </Button>
+          )}
+
+          {!isSalary && !isPublicProcurement && hasSuppliers && onOpenAddSupplier && (
             <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={onOpenAddSupplier}>
               Додати постачальника
             </Button>

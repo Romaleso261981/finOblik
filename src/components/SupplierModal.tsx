@@ -56,6 +56,7 @@ export function SupplierModal({ open, onClose, onSubmit, saving = false }: Props
       });
       setForm(emptyProfile());
       setError(null);
+      handleClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не вдалося зберегти");
     }
