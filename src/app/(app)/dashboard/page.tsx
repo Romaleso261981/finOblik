@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrgDataContext } from "@/contexts/OrgDataContext";
 import { Card } from "@/components/ui/Card";
-import { TransactionFiltersPanel } from "@/components/TransactionFilters";
+import { TransactionFiltersTrigger } from "@/components/TransactionFiltersTrigger";
 import {
   applyTransactionFilters,
   balancesByAccount,
@@ -13,12 +13,13 @@ import {
   sumByType,
 } from "@/lib/utils";
 import { buildCategoryDisplayMap } from "@/lib/categories";
+import { DEFAULT_TRANSACTION_FILTERS } from "@/lib/transaction-filters";
 import type { TransactionFilters } from "@/types";
 
 export default function DashboardPage() {
   const { orgId } = useAuth();
   const { accounts, categories, transactions, loading } = useOrgDataContext();
-  const [filters, setFilters] = useState<TransactionFilters>({ type: "all" });
+  const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_TRANSACTION_FILTERS);
 
   const filtered = useMemo(
     () => applyTransactionFilters(transactions, filters, categories),
@@ -51,22 +52,20 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">Огляд</h1>
-        <p className="text-sm text-muted mt-1">
-          Підсумки з урахуванням фільтрів нижче
-        </p>
-      </header>
-
-      <Card title="Фільтри">
-        <TransactionFiltersPanel
+    <div className="space-y-4 sm:space-y-6">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Огляд</h1>
+          <p className="text-sm text-muted mt-1">Підсумки з урахуванням обраних фільтрів</p>
+        </div>
+        <TransactionFiltersTrigger
           filters={filters}
-          onChange={setFilters}
+          onApply={setFilters}
           accounts={accounts}
           categories={categories}
+          className="self-start shrink-0"
         />
-      </Card>
+      </header>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>

@@ -44,7 +44,7 @@ export default function AccountsPage() {
       </header>
 
       <Card>
-        <form onSubmit={submit} className="flex gap-2">
+        <form onSubmit={submit} className="flex flex-col sm:flex-row gap-2">
           <Input
             label="Назва рахунку"
             placeholder="Наприклад: Monobank"

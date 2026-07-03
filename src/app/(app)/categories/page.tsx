@@ -92,7 +92,7 @@ export default function CategoriesPage() {
       </header>
 
       <Card title={`${SALARY_CATEGORY_NAME} — працівники`}>
-        <form onSubmit={addEmployee} className="flex gap-2">
+        <form onSubmit={addEmployee} className="flex flex-col sm:flex-row gap-2">
           <Input
             label="Ім’я працівника"
             placeholder="Коля, Рома, Діма…"
@@ -127,7 +127,7 @@ export default function CategoriesPage() {
       </Card>
 
       <Card>
-        <form onSubmit={submit} className="flex gap-2">
+        <form onSubmit={submit} className="flex flex-col sm:flex-row gap-2">
           <Input
             label="Нова категорія (верхній рівень)"
             value={name}

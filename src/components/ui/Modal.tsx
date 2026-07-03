@@ -28,7 +28,7 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
       <div
-        className="w-full max-w-lg rounded-xl bg-white shadow-xl border border-border"
+        className="w-full max-w-lg max-h-[92dvh] flex flex-col rounded-xl bg-white shadow-xl border border-border mx-auto"
         role="dialog"
         aria-modal
         aria-labelledby="modal-title"
@@ -41,7 +41,7 @@ export function Modal({
             ✕
           </Button>
         </div>
-        <div className="p-4">{children}</div>
+        <div className="p-4 max-h-[min(70vh,32rem)] overflow-y-auto">{children}</div>
       </div>
     </div>
   );

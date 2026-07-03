@@ -77,7 +77,7 @@ export function CategoryPicker({
           </Select>
 
           {isSalary && onAddEmployee && onNewEmployeeNameChange && (
-            <div className="flex gap-2 items-end">
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
               <Input
                 label="Новий працівник"
                 placeholder="Наприклад: Коля"
