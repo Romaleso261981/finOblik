@@ -6,7 +6,7 @@ import {
   subscribeCategories,
   subscribeTransactions,
 } from "@/lib/firestore";
-import { ensureDefaultExpenseCategories, ensureDefaultIncomeCategories } from "@/lib/ensure-default-categories";
+import { ensureDefaultExpenseCategories, ensureDefaultIncomeCategories, ensureDefaultIncomeTaxCategory } from "@/lib/ensure-default-categories";
 import { mapFirebaseError } from "@/lib/firebase-errors";
 import type { Account, Category, Transaction } from "@/types";
 
@@ -53,6 +53,7 @@ export function useOrgData(orgId: string | null) {
         setCategories(data);
         void ensureDefaultExpenseCategories(orgId, data);
         void ensureDefaultIncomeCategories(orgId, data);
+        void ensureDefaultIncomeTaxCategory(orgId, data);
         markReady();
       },
       onFail

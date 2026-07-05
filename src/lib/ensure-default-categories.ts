@@ -1,9 +1,11 @@
 import type { Category } from "@/types";
 import {
   findIncomeCashCategory,
+  findIncomeTaxCategory,
   findIncomeTransferCategory,
   findPublicProcurementCategory,
   INCOME_CASH_CATEGORY_NAME,
+  INCOME_TAX_CATEGORY_NAME,
   INCOME_TRANSFER_CATEGORY_NAME,
   PUBLIC_PROCUREMENT_CATEGORY_NAME,
 } from "@/lib/categories";
@@ -11,6 +13,7 @@ import { createCategory } from "@/lib/firestore";
 
 const ensuringExpense = new Set<string>();
 const ensuringIncome = new Set<string>();
+const ensuringTax = new Set<string>();
 
 /** Гарантує категорію «Публічна закупка» у списку витрат */
 export async function ensureDefaultExpenseCategories(
@@ -48,5 +51,26 @@ export async function ensureDefaultIncomeCategories(
     }
   } finally {
     ensuringIncome.delete(orgId);
+  }
+}
+
+/** Категорія витрат для автоматичного податку 7% від нарахувань */
+export async function ensureDefaultIncomeTaxCategory(
+  orgId: string,
+  categories: Category[]
+): Promise<string> {
+  const existing = findIncomeTaxCategory(categories);
+  if (existing) return existing.id;
+  if (ensuringTax.has(orgId)) {
+    const again = findIncomeTaxCategory(categories);
+    if (again) return again.id;
+    throw new Error("Категорія податку ще створюється");
+  }
+
+  ensuringTax.add(orgId);
+  try {
+    return await createCategory(orgId, INCOME_TAX_CATEGORY_NAME, null, "expense");
+  } finally {
+    ensuringTax.delete(orgId);
   }
 }

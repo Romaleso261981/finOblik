@@ -17,11 +17,13 @@ import {
   MISHA_PROJECTANT_INCOMES_TOTAL,
 } from "@/data/misha-projectant-incomes";
 import { bulkImportTransactions, parseImportJson } from "@/lib/bulk-import";
+import { backfillIncomeTaxes } from "@/lib/firestore";
+import { ensureDefaultIncomeTaxCategory } from "@/lib/ensure-default-categories";
 import { formatDate, formatMoney } from "@/lib/utils";
 
 export default function ImportPage() {
   const { orgId, user } = useAuth();
-  const { accounts, categories } = useOrgDataContext();
+  const { accounts, categories, transactions } = useOrgDataContext();
   const [accountName, setAccountName] = useState("Готівка");
   const [customAccountId, setCustomAccountId] = useState("");
   const [jsonText, setJsonText] = useState("");
@@ -99,6 +101,45 @@ export default function ImportPage() {
     }
   };
 
+  const incomesMissingTax = useMemo(() => {
+    const linked = new Set(
+      transactions
+        .filter((t) => t.type === "expense" && t.linkedIncomeId)
+        .map((t) => t.linkedIncomeId as string)
+    );
+    return transactions.filter(
+      (t) =>
+        t.type === "income" &&
+        !t.taxExpenseId &&
+        !linked.has(t.id)
+    ).length;
+  }, [transactions]);
+
+  const backfillTaxes = async () => {
+    if (!orgId || !user) return;
+    setRunning(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const taxCategoryId = await ensureDefaultIncomeTaxCategory(orgId, categories);
+      const created = await backfillIncomeTaxes(
+        orgId,
+        transactions,
+        taxCategoryId,
+        user.uid
+      );
+      setStatus(
+        created > 0
+          ? `Додано ${created} витрат «Податок 7%» для нарахувань без податку.`
+          : "Усі нарахування вже мають податкові витрати."
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Помилка");
+    } finally {
+      setRunning(false);
+    }
+  };
+
   if (!orgId) return null;
 
   return (
@@ -110,11 +151,28 @@ export default function ImportPage() {
         </p>
       </header>
 
+      <Card title="Податок 7% від нарахувань">
+        <p className="text-sm text-slate-700 mb-3">
+          Для кожного нарахування автоматично створюється витрата 7% у категорії «Податки (7%)».
+          Нові надходження вже отримують податок; для старих записів натисніть кнопку нижче.
+        </p>
+        {incomesMissingTax > 0 ? (
+          <p className="text-xs text-amber-800 mb-3">
+            Нарахувань без податкової витрати: <strong>{incomesMissingTax}</strong>
+          </p>
+        ) : (
+          <p className="text-xs text-muted mb-3">Податок проставлено для всіх нарахувань.</p>
+        )}
+        <Button variant="secondary" onClick={backfillTaxes} disabled={running || incomesMissingTax === 0}>
+          {running ? "Обробка..." : "Додати 7% до нарахувань без податку"}
+        </Button>
+      </Card>
+
       <Card title={`Нарахування: ${MISHA_PROJECTANT_ACCOUNT_NAME}`}>
         <p className="text-sm text-slate-700 mb-3">
           {MISHA_PROJECTANT_INCOMES.length} надходжень на суму{" "}
           <strong className="text-income">{formatMoney(MISHA_PROJECTANT_INCOMES_TOTAL)}</strong>{" "}
-          (травень–липень 2026). Категорія: «Перерахунок на рахунок».
+          (травень–липень 2026). Категорія: «Перерахунок на рахунок». До кожного рядка додається витрата 7% податку.
         </p>
         {mishaAccount ? (
           <p className="text-xs text-muted mb-3">

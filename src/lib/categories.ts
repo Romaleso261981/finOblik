@@ -4,6 +4,7 @@ export const SALARY_CATEGORY_NAME = "Зарплата";
 export const PUBLIC_PROCUREMENT_CATEGORY_NAME = "Публічна закупка";
 export const INCOME_CASH_CATEGORY_NAME = "Готівка";
 export const INCOME_TRANSFER_CATEGORY_NAME = "Перерахунок на рахунок";
+export const INCOME_TAX_CATEGORY_NAME = "Податки (7%)";
 
 export function normalizeCategoryName(name: string): string {
   return name.trim().toLowerCase();
@@ -114,6 +115,10 @@ export function findIncomeCashCategory(categories: Category[]): Category | undef
 
 export function findIncomeTransferCategory(categories: Category[]): Category | undefined {
   return findCategoryByName(categories, INCOME_TRANSFER_CATEGORY_NAME, null, "income");
+}
+
+export function findIncomeTaxCategory(categories: Category[]): Category | undefined {
+  return findCategoryByName(categories, INCOME_TAX_CATEGORY_NAME, null, "expense");
 }
 
 export function incomeRootNeedsSubcategory(

@@ -1,4 +1,5 @@
 import { createAccount, createCategory, createExpense, createIncome } from "./firestore";
+import { ensureDefaultIncomeTaxCategory } from "./ensure-default-categories";
 import type { Account, Category } from "@/types";
 import type { LegacyImportRow } from "@/data/legacy-notes-import";
 
@@ -68,6 +69,8 @@ export async function bulkImportTransactions(
     accountCreated = true;
   }
 
+  const taxCategoryId = await ensureDefaultIncomeTaxCategory(orgId, categories);
+
   let imported = 0;
   for (const row of rows) {
     const categoryId = categoryMap.get(row.category.trim().toLowerCase());
@@ -81,7 +84,7 @@ export async function bulkImportTransactions(
         categoryId: categoryId ?? undefined,
         comment: row.comment,
         createdBy,
-      });
+      }, taxCategoryId);
     } else {
       if (!categoryId) throw new Error(`Немає категорії: ${row.category}`);
       await createExpense(orgId, {

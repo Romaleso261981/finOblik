@@ -10,10 +10,14 @@ import {
   resolveCategoryId,
   splitCategorySelection,
 } from "@/components/CategoryPicker";
-import { deleteTransaction, updateTransaction } from "@/lib/firestore";
+import { deleteTransaction, syncIncomeTaxExpense, updateTransaction } from "@/lib/firestore";
+import { ensureDefaultIncomeTaxCategory } from "@/lib/ensure-default-categories";
+import { getFirebaseDb, transactionsCollection } from "@/lib/firebase";
+import { deleteDoc, doc } from "firebase/firestore";
 import { formatDate, formatDateInput, formatMoney } from "@/lib/utils";
 import {
   buildCategoryDisplayMap,
+  findIncomeTaxCategory,
   incomeRootNeedsSubcategory,
   isPublicProcurementRootCategory,
   isSalaryRootCategory,
@@ -144,7 +148,7 @@ export function OperationsTable({
     setDeleteLoading(true);
     setDeleteError(null);
     try {
-      await deleteTransaction(orgId, deleting.id);
+      await deleteTransaction(orgId, deleting);
       setDeleting(null);
       setSelected(null);
     } catch (e) {
@@ -439,6 +443,15 @@ function EditTransactionModal({
       if (Number.isNaN(num) || num <= 0) throw new Error("Вкажіть коректну суму");
 
       if (type === "expense") {
+        if (
+          transaction.type === "income" &&
+          transaction.taxExpenseId
+        ) {
+          await deleteDoc(
+            doc(getFirebaseDb(), transactionsCollection(orgId), transaction.taxExpenseId)
+          );
+        }
+
         const categoryId = resolveCategoryId(
           categories,
           parentCategoryId,
@@ -496,6 +509,22 @@ function EditTransactionModal({
           transferredBy: transferredBy.trim(),
           categoryId: categoryId || "",
         });
+
+        const taxCategoryId =
+          findIncomeTaxCategory(categories)?.id ??
+          (await ensureDefaultIncomeTaxCategory(orgId, categories));
+        await syncIncomeTaxExpense(
+          orgId,
+          {
+            ...transaction,
+            type: "income",
+            taxExpenseId:
+              transaction.type === "income" ? transaction.taxExpenseId : undefined,
+          },
+          { date, amount: num, accountId },
+          taxCategoryId,
+          transaction.createdBy
+        );
       }
       onClose();
     } catch (e) {

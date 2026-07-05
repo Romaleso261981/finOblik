@@ -12,6 +12,7 @@ import {
   resolveCategoryId,
 } from "@/components/CategoryPicker";
 import { createIncome } from "@/lib/firestore";
+import { ensureDefaultIncomeTaxCategory } from "@/lib/ensure-default-categories";
 import { incomeRootNeedsSubcategory } from "@/lib/categories";
 import { formatDateInput } from "@/lib/utils";
 import Link from "next/link";
@@ -61,6 +62,8 @@ export default function IncomePage() {
         throw new Error("Оберіть підкатегорію надходження");
       }
 
+      const taxCategoryId = await ensureDefaultIncomeTaxCategory(orgId, categories);
+
       await createIncome(orgId, {
         date,
         amount: num,
@@ -69,11 +72,11 @@ export default function IncomePage() {
         categoryId: categoryId || undefined,
         comment,
         createdBy: user.uid,
-      });
+      }, taxCategoryId);
       setAmount("");
       setTransferredBy("");
       setComment("");
-      setMessage("Надходження збережено");
+      setMessage("Надходження збережено (додано витрату 7% податку)");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Помилка");
     } finally {

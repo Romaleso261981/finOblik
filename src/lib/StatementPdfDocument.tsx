@@ -60,11 +60,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: "#e2e8f0",
   },
-  colDate: { width: "14%" },
-  colAmount: { width: "16%", textAlign: "right" },
-  colAccount: { width: "18%" },
-  colCategory: { width: "22%" },
-  colDesc: { width: "30%" },
+  colDate: { width: 68, paddingRight: 6, flexShrink: 0 },
+  colAmount: { width: 72, paddingRight: 6, flexShrink: 0 },
+  amountText: { textAlign: "right" },
+  colAccount: { width: 88, paddingRight: 6, flexShrink: 0 },
+  colCategory: { width: 100, paddingRight: 6, flexShrink: 0 },
+  colDesc: { flex: 1, flexShrink: 1, minWidth: 0 },
   footer: {
     position: "absolute",
     bottom: 28,
@@ -118,26 +119,46 @@ export function StatementPdfDocument({
         </View>
 
         <View style={styles.tableHeader}>
-          <Text style={styles.colDate}>Дата</Text>
-          <Text style={styles.colAmount}>Сума</Text>
-          <Text style={styles.colAccount}>Рахунок</Text>
-          <Text style={styles.colCategory}>Категорія</Text>
-          <Text style={styles.colDesc}>Опис</Text>
+          <View style={styles.colDate}>
+            <Text>Дата</Text>
+          </View>
+          <View style={styles.colAmount}>
+            <Text style={styles.amountText}>Сума</Text>
+          </View>
+          <View style={styles.colAccount}>
+            <Text>Рахунок</Text>
+          </View>
+          <View style={styles.colCategory}>
+            <Text>Категорія</Text>
+          </View>
+          <View style={styles.colDesc}>
+            <Text>Опис</Text>
+          </View>
         </View>
         {rows.map((row, i) => (
-          <View key={i} style={styles.tableRow}>
-            <Text style={styles.colDate}>{row.date}</Text>
-            <Text
-              style={[
-                styles.colAmount,
-                row.type === "income" ? styles.income : styles.expense,
-              ]}
-            >
-              {row.amount}
-            </Text>
-            <Text style={styles.colAccount}>{row.account}</Text>
-            <Text style={styles.colCategory}>{row.category}</Text>
-            <Text style={styles.colDesc}>{row.description}</Text>
+          <View key={i} style={styles.tableRow} wrap={false}>
+            <View style={styles.colDate}>
+              <Text>{row.date}</Text>
+            </View>
+            <View style={styles.colAmount}>
+              <Text
+                style={[
+                  styles.amountText,
+                  row.type === "income" ? styles.income : styles.expense,
+                ]}
+              >
+                {row.amount}
+              </Text>
+            </View>
+            <View style={styles.colAccount}>
+              <Text>{row.account}</Text>
+            </View>
+            <View style={styles.colCategory}>
+              <Text>{row.category}</Text>
+            </View>
+            <View style={styles.colDesc}>
+              <Text>{row.description}</Text>
+            </View>
           </View>
         ))}
 

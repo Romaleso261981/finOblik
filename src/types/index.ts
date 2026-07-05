@@ -67,6 +67,10 @@ export interface Transaction {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
+  /** Витрата-податок для цього нарахування */
+  taxExpenseId?: string;
+  /** Нарахування, від якого пораховано податок */
+  linkedIncomeId?: string;
 }
 
 export interface TransactionFilters {
