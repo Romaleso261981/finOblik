@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   onSnapshot,
   serverTimestamp,
@@ -15,7 +16,7 @@ import {
   getFirebaseDb,
   transactionsCollection,
 } from "./firebase";
-import { mapDoc, timestampToDate, type Account, type Category, type SupplierProfile, type Transaction } from "@/types";
+import { mapDoc, timestampToDate, type Account, type Category, type CategoryScope, type SupplierProfile, type Transaction, type TransactionType } from "@/types";
 import { supplierDisplayName } from "@/lib/categories";
 
 function mapAccount(snap: Parameters<typeof mapDoc<Account>>[0]): Account {
@@ -38,10 +39,14 @@ function mapCategory(snap: Parameters<typeof mapDoc<Category>>[0]): Category {
             phone: String(supplierRaw.phone ?? ""),
           }
         : undefined;
+    const scopeRaw = data.scope as string | undefined;
+    const scope =
+      scopeRaw === "income" || scopeRaw === "expense" ? scopeRaw : undefined;
     return {
       name: data.name,
       parentId: (data.parentId as string | undefined) ?? null,
       createdAt: timestampToDate(data.createdAt),
+      scope,
       supplier,
     };
   });
@@ -126,13 +131,18 @@ export async function deleteAccount(orgId: string, accountId: string) {
 export async function createCategory(
   orgId: string,
   name: string,
-  parentId: string | null = null
+  parentId: string | null = null,
+  scope: CategoryScope = "expense"
 ): Promise<string> {
-  const ref = await addDoc(collection(getFirebaseDb(), categoriesCollection(orgId)), {
+  const payload: Record<string, unknown> = {
     name: name.trim(),
     parentId: parentId ?? null,
     createdAt: serverTimestamp(),
-  });
+  };
+  if (!parentId) {
+    payload.scope = scope;
+  }
+  const ref = await addDoc(collection(getFirebaseDb(), categoriesCollection(orgId)), payload);
   return ref.id;
 }
 
@@ -161,11 +171,27 @@ export async function deleteCategory(orgId: string, categoryId: string) {
   await deleteDoc(doc(getFirebaseDb(), categoriesCollection(orgId), categoryId));
 }
 
+export async function updateCategoryName(
+  orgId: string,
+  categoryId: string,
+  name: string,
+  options?: { supplier?: Category["supplier"] }
+) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Назва не може бути порожньою");
+  const payload: Record<string, unknown> = { name: trimmed };
+  if (options?.supplier) {
+    payload.supplier = { ...options.supplier, displayName: trimmed };
+  }
+  await updateDoc(doc(getFirebaseDb(), categoriesCollection(orgId), categoryId), payload);
+}
+
 export type IncomeInput = {
   date: string;
   amount: number;
   transferredBy: string;
   accountId: string;
+  categoryId?: string;
   comment?: string;
   createdBy: string;
 };
@@ -188,6 +214,7 @@ export async function createIncome(orgId: string, input: IncomeInput) {
     amount: input.amount,
     transferredBy: input.transferredBy.trim(),
     accountId: input.accountId,
+    categoryId: input.categoryId ?? null,
     comment: input.comment?.trim() || null,
     createdBy: input.createdBy,
     createdAt: now,
@@ -219,6 +246,7 @@ export async function updateTransaction(
     amount: number;
     accountId: string;
     comment: string;
+    type: TransactionType;
     transferredBy: string;
     categoryId: string;
     description: string;
@@ -230,9 +258,25 @@ export async function updateTransaction(
   if (patch.amount !== undefined) data.amount = patch.amount;
   if (patch.accountId) data.accountId = patch.accountId;
   if (patch.comment !== undefined) data.comment = patch.comment || null;
-  if (patch.transferredBy !== undefined) data.transferredBy = patch.transferredBy;
-  if (patch.categoryId !== undefined) data.categoryId = patch.categoryId;
-  if (patch.description !== undefined) data.description = patch.description;
+
+  if (patch.type === "income") {
+    data.type = "income";
+    data.transferredBy = patch.transferredBy?.trim() ?? "";
+    if (patch.categoryId !== undefined) {
+      data.categoryId = patch.categoryId || deleteField();
+    }
+    data.description = deleteField();
+  } else if (patch.type === "expense") {
+    data.type = "expense";
+    data.categoryId = patch.categoryId || deleteField();
+    data.description = patch.description?.trim() ?? "";
+    data.transferredBy = deleteField();
+  } else {
+    if (patch.transferredBy !== undefined) data.transferredBy = patch.transferredBy;
+    if (patch.categoryId !== undefined) data.categoryId = patch.categoryId || deleteField();
+    if (patch.description !== undefined) data.description = patch.description;
+  }
+
   await updateDoc(ref, data);
 }
 

@@ -1,24 +1,52 @@
 import type { Category } from "@/types";
 import {
+  findIncomeCashCategory,
+  findIncomeTransferCategory,
   findPublicProcurementCategory,
+  INCOME_CASH_CATEGORY_NAME,
+  INCOME_TRANSFER_CATEGORY_NAME,
   PUBLIC_PROCUREMENT_CATEGORY_NAME,
 } from "@/lib/categories";
 import { createCategory } from "@/lib/firestore";
 
-const ensuring = new Set<string>();
+const ensuringExpense = new Set<string>();
+const ensuringIncome = new Set<string>();
 
-/** Гарантує категорію «Публічна закупка» у списку */
+/** Гарантує категорію «Публічна закупка» у списку витрат */
 export async function ensureDefaultExpenseCategories(
   orgId: string,
   categories: Category[]
 ): Promise<void> {
   if (findPublicProcurementCategory(categories)) return;
-  if (ensuring.has(orgId)) return;
+  if (ensuringExpense.has(orgId)) return;
 
-  ensuring.add(orgId);
+  ensuringExpense.add(orgId);
   try {
-    await createCategory(orgId, PUBLIC_PROCUREMENT_CATEGORY_NAME);
+    await createCategory(orgId, PUBLIC_PROCUREMENT_CATEGORY_NAME, null, "expense");
   } finally {
-    ensuring.delete(orgId);
+    ensuringExpense.delete(orgId);
+  }
+}
+
+/** Базові категорії надходжень: готівка та перерахунок */
+export async function ensureDefaultIncomeCategories(
+  orgId: string,
+  categories: Category[]
+): Promise<void> {
+  const hasCash = Boolean(findIncomeCashCategory(categories));
+  const hasTransfer = Boolean(findIncomeTransferCategory(categories));
+  if (hasCash && hasTransfer) return;
+  if (ensuringIncome.has(orgId)) return;
+
+  ensuringIncome.add(orgId);
+  try {
+    if (!hasCash) {
+      await createCategory(orgId, INCOME_CASH_CATEGORY_NAME, null, "income");
+    }
+    if (!hasTransfer) {
+      await createCategory(orgId, INCOME_TRANSFER_CATEGORY_NAME, null, "income");
+    }
+  } finally {
+    ensuringIncome.delete(orgId);
   }
 }

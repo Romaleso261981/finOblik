@@ -1,15 +1,47 @@
-import type { Category, SupplierProfile } from "@/types";
+import type { Category, CategoryScope, SupplierProfile } from "@/types";
 
 export const SALARY_CATEGORY_NAME = "Зарплата";
 export const PUBLIC_PROCUREMENT_CATEGORY_NAME = "Публічна закупка";
+export const INCOME_CASH_CATEGORY_NAME = "Готівка";
+export const INCOME_TRANSFER_CATEGORY_NAME = "Перерахунок на рахунок";
 
 export function normalizeCategoryName(name: string): string {
   return name.trim().toLowerCase();
 }
 
-export function getRootCategories(categories: Category[]): Category[] {
+export function getRootScope(category: Category): CategoryScope {
+  return category.scope ?? "expense";
+}
+
+export function getRootCategoryForId(
+  categories: Category[],
+  categoryId: string
+): Category | undefined {
+  let current = getCategoryById(categories, categoryId);
+  while (current?.parentId) {
+    current = getCategoryById(categories, current.parentId);
+  }
+  return current;
+}
+
+export function categoryScopeOf(
+  categories: Category[],
+  categoryId: string
+): CategoryScope {
+  const root = getRootCategoryForId(categories, categoryId);
+  return root ? getRootScope(root) : "expense";
+}
+
+export function getRootCategories(
+  categories: Category[],
+  scope?: CategoryScope
+): Category[] {
   return categories
-    .filter((c) => !c.parentId)
+    .filter((c) => {
+      if (c.parentId) return false;
+      if (!scope) return true;
+      return getRootScope(c) === scope;
+    })
     .sort((a, b) => a.name.localeCompare(b.name, "uk"));
 }
 
@@ -56,22 +88,39 @@ export function getExpenseSubcategoryOptions(
 export function findCategoryByName(
   categories: Category[],
   name: string,
-  parentId: string | null = null
+  parentId: string | null = null,
+  scope?: CategoryScope
 ): Category | undefined {
   const n = normalizeCategoryName(name);
   return categories.find(
     (c) =>
       normalizeCategoryName(c.name) === n &&
-      (parentId === null ? !c.parentId : c.parentId === parentId)
+      (parentId === null ? !c.parentId : c.parentId === parentId) &&
+      (parentId !== null || !scope || getRootScope(c) === scope)
   );
 }
 
 export function findSalaryCategory(categories: Category[]): Category | undefined {
-  return findCategoryByName(categories, SALARY_CATEGORY_NAME, null);
+  return findCategoryByName(categories, SALARY_CATEGORY_NAME, null, "expense");
 }
 
 export function findPublicProcurementCategory(categories: Category[]): Category | undefined {
-  return findCategoryByName(categories, PUBLIC_PROCUREMENT_CATEGORY_NAME, null);
+  return findCategoryByName(categories, PUBLIC_PROCUREMENT_CATEGORY_NAME, null, "expense");
+}
+
+export function findIncomeCashCategory(categories: Category[]): Category | undefined {
+  return findCategoryByName(categories, INCOME_CASH_CATEGORY_NAME, null, "income");
+}
+
+export function findIncomeTransferCategory(categories: Category[]): Category | undefined {
+  return findCategoryByName(categories, INCOME_TRANSFER_CATEGORY_NAME, null, "income");
+}
+
+export function incomeRootNeedsSubcategory(
+  categories: Category[],
+  parentCategoryId: string
+): boolean {
+  return getChildCategories(categories, parentCategoryId).length > 0;
 }
 
 export function isSalaryRootCategory(categories: Category[], categoryId: string): boolean {
@@ -100,9 +149,7 @@ export function rootNeedsSubcategory(
 ): boolean {
   if (isSalaryRootCategory(categories, parentCategoryId)) return true;
   if (isPublicProcurementRootCategory(categories, parentCategoryId)) return true;
-  if (getChildCategories(categories, parentCategoryId).length > 0) return true;
-  if (getSupplierCategories(categories).length > 0) return true;
-  return false;
+  return getChildCategories(categories, parentCategoryId).length > 0;
 }
 
 export function subcategoryPickerLabel(
@@ -111,9 +158,6 @@ export function subcategoryPickerLabel(
 ): string {
   if (isSalaryRootCategory(categories, parentCategoryId)) return "Працівник";
   if (isPublicProcurementRootCategory(categories, parentCategoryId)) return "Постачальник";
-  if (getSupplierCategories(categories).length > 0) {
-    return "Підкатегорія / постачальник";
-  }
   return "Підкатегорія";
 }
 

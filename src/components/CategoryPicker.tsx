@@ -5,15 +5,16 @@ import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import {
+  getChildCategories,
   getExpenseSubcategoryOptions,
   getRootCategories,
-  getSupplierCategories,
+  incomeRootNeedsSubcategory,
   isPublicProcurementRootCategory,
   isSalaryRootCategory,
   rootNeedsSubcategory,
   subcategoryPickerLabel,
 } from "@/lib/categories";
-import type { Category } from "@/types";
+import type { Category, CategoryScope } from "@/types";
 
 type InlineCreate = {
   value: string;
@@ -30,6 +31,7 @@ type Props = {
   subCategoryId: string;
   onParentChange: (id: string) => void;
   onSubChange: (id: string) => void;
+  mode?: CategoryScope;
   newEmployeeName?: string;
   onNewEmployeeNameChange?: (name: string) => void;
   onAddEmployee?: () => void;
@@ -43,26 +45,33 @@ export function CategoryPicker({
   subCategoryId,
   onParentChange,
   onSubChange,
+  mode = "expense",
   newEmployeeName = "",
   onNewEmployeeNameChange,
   onAddEmployee,
   addingEmployee,
   onOpenAddSupplier,
 }: Props) {
-  const roots = useMemo(() => getRootCategories(categories), [categories]);
-  const children = useMemo(
-    () =>
-      parentCategoryId
-        ? getExpenseSubcategoryOptions(categories, parentCategoryId)
-        : [],
-    [categories, parentCategoryId]
+  const isIncome = mode === "income";
+  const roots = useMemo(
+    () => getRootCategories(categories, mode),
+    [categories, mode]
   );
+  const children = useMemo(() => {
+    if (!parentCategoryId) return [];
+    if (isIncome) return getChildCategories(categories, parentCategoryId);
+    return getExpenseSubcategoryOptions(categories, parentCategoryId);
+  }, [categories, parentCategoryId, isIncome]);
 
-  const isSalary = isSalaryRootCategory(categories, parentCategoryId);
-  const isPublicProcurement = isPublicProcurementRootCategory(categories, parentCategoryId);
-  const needsSub = rootNeedsSubcategory(categories, parentCategoryId);
-  const subLabel = subcategoryPickerLabel(categories, parentCategoryId);
-  const hasSuppliers = getSupplierCategories(categories).length > 0;
+  const isSalary = !isIncome && isSalaryRootCategory(categories, parentCategoryId);
+  const isPublicProcurement =
+    !isIncome && isPublicProcurementRootCategory(categories, parentCategoryId);
+  const needsSub = isIncome
+    ? incomeRootNeedsSubcategory(categories, parentCategoryId)
+    : rootNeedsSubcategory(categories, parentCategoryId);
+  const subLabel = isIncome
+    ? "Підкатегорія"
+    : subcategoryPickerLabel(categories, parentCategoryId);
 
   const renderInlineCreate = (cfg: InlineCreate | undefined) => {
     if (!cfg) return null;
@@ -99,31 +108,40 @@ export function CategoryPicker({
         }
       : undefined;
 
-  const subPlaceholder = isSalary
-    ? "Оберіть працівника"
-    : isPublicProcurement
-      ? children.length > 0
-        ? "Оберіть постачальника"
-        : "Постачальників ще немає"
-      : hasSuppliers
-        ? "Оберіть підкатегорію або постачальника"
+  const subPlaceholder = isIncome
+    ? children.length > 0
+      ? "Оберіть підкатегорію"
+      : "Підкатегорій ще немає"
+    : isSalary
+      ? "Оберіть працівника"
+      : isPublicProcurement
+        ? children.length > 0
+          ? "Оберіть постачальника"
+          : "Постачальників ще немає"
         : "Оберіть підкатегорію";
 
   return (
     <div className="space-y-3">
       <Select
-        label="Категорія витрати"
+        label={isIncome ? "Категорія надходження" : "Категорія витрати"}
         value={parentCategoryId}
         onChange={(e) => onParentChange(e.target.value)}
-        required
       >
-        <option value="">Оберіть категорію</option>
+        <option value="">
+          {isIncome ? "Оберіть категорію (необов’язково)" : "Оберіть категорію"}
+        </option>
         {roots.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}
           </option>
         ))}
       </Select>
+      {roots.length === 0 && isIncome && (
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Категорій надходжень ще немає. Додайте їх у розділі «Категорії» (блок «Категорії
+          надходжень»).
+        </p>
+      )}
 
       {parentCategoryId && needsSub && (
         <>
@@ -131,7 +149,6 @@ export function CategoryPicker({
             label={subLabel}
             value={subCategoryId}
             onChange={(e) => onSubChange(e.target.value)}
-            required
           >
             <option value="">{subPlaceholder}</option>
             {children.map((c) => (
@@ -142,13 +159,12 @@ export function CategoryPicker({
           </Select>
 
           {isPublicProcurement && onOpenAddSupplier && (
-            <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={onOpenAddSupplier}>
-              Додати постачальника
-            </Button>
-          )}
-
-          {!isSalary && !isPublicProcurement && hasSuppliers && onOpenAddSupplier && (
-            <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={onOpenAddSupplier}>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={onOpenAddSupplier}
+            >
               Додати постачальника
             </Button>
           )}
@@ -160,19 +176,26 @@ export function CategoryPicker({
   );
 }
 
-export function resolveExpenseCategoryId(
+export function resolveCategoryId(
   categories: Category[],
   parentCategoryId: string,
-  subCategoryId: string
+  subCategoryId: string,
+  mode: CategoryScope = "expense"
 ): string {
-  if (rootNeedsSubcategory(categories, parentCategoryId)) {
-    return subCategoryId;
-  }
+  if (!parentCategoryId) return "";
+  const needsSub =
+    mode === "income"
+      ? incomeRootNeedsSubcategory(categories, parentCategoryId)
+      : rootNeedsSubcategory(categories, parentCategoryId);
+  if (needsSub) return subCategoryId;
   return parentCategoryId;
 }
 
+/** @deprecated use resolveCategoryId */
+export const resolveExpenseCategoryId = resolveCategoryId;
+
 /** Розкладає збережений categoryId на рівні для форми */
-export function splitExpenseCategorySelection(
+export function splitCategorySelection(
   categories: Category[],
   categoryId: string
 ): { parentCategoryId: string; subCategoryId: string } {
@@ -196,3 +219,5 @@ export function splitExpenseCategorySelection(
     subCategoryId: chain[chain.length - 1].id,
   };
 }
+
+export const splitExpenseCategorySelection = splitCategorySelection;

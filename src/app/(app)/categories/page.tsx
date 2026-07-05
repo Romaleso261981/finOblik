@@ -7,8 +7,9 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { CategoryNameEditor, CategoryNameRow } from "@/components/CategoryNameRow";
 import { SupplierModal } from "@/components/SupplierModal";
-import { createCategory, createSupplierCategory, deleteCategory } from "@/lib/firestore";
+import { createCategory, createSupplierCategory, deleteCategory, updateCategoryName } from "@/lib/firestore";
 import { mapFirebaseError } from "@/lib/firebase-errors";
 import {
   canDeleteCategory,
@@ -16,6 +17,7 @@ import {
   findSalaryCategory,
   getChildCategories,
   getRootCategories,
+  getRootScope,
   PUBLIC_PROCUREMENT_CATEGORY_NAME,
   SALARY_CATEGORY_NAME,
 } from "@/lib/categories";
@@ -26,27 +28,30 @@ function CategoryTreeItem({
   categories,
   depth,
   onRemove,
+  onRename,
 }: {
   category: Category;
   categories: Category[];
   depth: number;
   onRemove: (id: string) => void;
+  onRename: (category: Category, newName: string) => Promise<void>;
 }) {
   const children = getChildCategories(categories, category.id);
+  const phoneSuffix = category.supplier?.phone ? ` · ${category.supplier.phone}` : undefined;
+  const scopeSuffix =
+    depth === 0 && getRootScope(category) === "income" ? " · надходження" : undefined;
   return (
-    <li className={depth === 0 ? "py-2 text-sm" : "flex items-center justify-between text-muted py-1"}>
-      <div className={depth === 0 ? "flex items-center justify-between" : "flex-1 flex items-center justify-between"}>
-        <span className={depth === 0 ? "font-medium" : undefined}>
-          {depth > 0 && "→ "}
-          {category.name}
-          {category.supplier?.phone ? (
-            <span className="text-muted font-normal"> · {category.supplier.phone}</span>
-          ) : null}
-        </span>
-        <Button variant="ghost" className="text-expense px-2 shrink-0" onClick={() => onRemove(category.id)}>
-          Видалити
-        </Button>
-      </div>
+    <li className={depth === 0 ? "py-2 text-sm" : "py-1 text-muted"}>
+      <CategoryNameEditor
+        compact
+        showArrow={depth > 0}
+        name={category.name}
+        suffix={
+          (scopeSuffix ?? "") + (phoneSuffix ?? "") || undefined
+        }
+        onSave={(newName) => onRename(category, newName)}
+        onRemove={() => onRemove(category.id)}
+      />
       {children.length > 0 && (
         <ul className={`${depth === 0 ? "mt-1 ml-3 border-l border-border pl-3 space-y-1" : "ml-4 mt-1 space-y-1"}`}>
           {children.map((ch) => (
@@ -56,6 +61,7 @@ function CategoryTreeItem({
               categories={categories}
               depth={depth + 1}
               onRemove={onRemove}
+              onRename={onRename}
             />
           ))}
         </ul>
@@ -68,6 +74,9 @@ export default function CategoriesPage() {
   const { orgId } = useAuth();
   const { categories } = useOrgDataContext();
   const [name, setName] = useState("");
+  const [incomeRootName, setIncomeRootName] = useState("");
+  const [incomeSubParentId, setIncomeSubParentId] = useState("");
+  const [incomeSubName, setIncomeSubName] = useState("");
   const [subParentId, setSubParentId] = useState("");
   const [subName, setSubName] = useState("");
   const [employeeName, setEmployeeName] = useState("");
@@ -76,6 +85,8 @@ export default function CategoriesPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const expenseRoots = useMemo(() => getRootCategories(categories, "expense"), [categories]);
+  const incomeRoots = useMemo(() => getRootCategories(categories, "income"), [categories]);
   const roots = useMemo(() => getRootCategories(categories), [categories]);
   const salary = useMemo(() => findSalaryCategory(categories), [categories]);
   const publicProcurement = useMemo(() => findPublicProcurementCategory(categories), [categories]);
@@ -98,9 +109,37 @@ export default function CategoriesPage() {
     setError(null);
     setMessage(null);
     try {
-      await createCategory(orgId, name);
+      await createCategory(orgId, name, null, "expense");
       setName("");
       setMessage("Категорію додано");
+    } catch (e) {
+      setError(mapFirebaseError(e));
+    }
+  };
+
+  const addIncomeRoot = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!orgId || !incomeRootName.trim()) return;
+    setError(null);
+    setMessage(null);
+    try {
+      await createCategory(orgId, incomeRootName.trim(), null, "income");
+      setIncomeRootName("");
+      setMessage("Категорію надходження додано");
+    } catch (e) {
+      setError(mapFirebaseError(e));
+    }
+  };
+
+  const addIncomeSubcategory = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!orgId || !incomeSubParentId || !incomeSubName.trim()) return;
+    setError(null);
+    setMessage(null);
+    try {
+      await createCategory(orgId, incomeSubName.trim(), incomeSubParentId, "income");
+      setIncomeSubName("");
+      setMessage("Підкатегорію надходження додано");
     } catch (e) {
       setError(mapFirebaseError(e));
     }
@@ -172,14 +211,76 @@ export default function CategoriesPage() {
     }
   };
 
+  const rename = async (category: Category, newName: string) => {
+    if (!orgId) throw new Error("Організація не підключена");
+    setError(null);
+    try {
+      await updateCategoryName(orgId, category.id, newName, {
+        supplier: category.supplier,
+      });
+      setMessage("Назву оновлено");
+    } catch (e) {
+      const msg = mapFirebaseError(e);
+      setError(msg);
+      throw new Error(msg);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-xl">
       <header>
-        <h1 className="text-2xl font-bold">Категорії витрат</h1>
+        <h1 className="text-2xl font-bold">Категорії</h1>
         <p className="text-sm text-muted mt-1">
-          Групи, підкатегорії, працівники та постачальники
+          Витрати, надходження, працівники та постачальники
         </p>
       </header>
+
+      <Card title="Категорії надходжень">
+        <form onSubmit={addIncomeRoot} className="flex flex-col sm:flex-row gap-2 mb-4">
+          <Input
+            label="Нова група надходжень"
+            placeholder="Наприклад: Інше надходження"
+            value={incomeRootName}
+            onChange={(e) => setIncomeRootName(e.target.value)}
+            className="flex-1"
+          />
+          <div className="flex items-end">
+            <Button type="submit">Додати</Button>
+          </div>
+        </form>
+        <form onSubmit={addIncomeSubcategory} className="space-y-3">
+          <Select
+            label="Група надходжень"
+            value={incomeSubParentId}
+            onChange={(e) => setIncomeSubParentId(e.target.value)}
+            required
+          >
+            <option value="">Оберіть групу</option>
+            {incomeRoots.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              label="Підкатегорія"
+              placeholder="Наприклад: Monobank, Privat…"
+              value={incomeSubName}
+              onChange={(e) => setIncomeSubName(e.target.value)}
+              className="flex-1"
+              required
+            />
+            <div className="flex items-end">
+              <Button type="submit">Додати підкатегорію</Button>
+            </div>
+          </div>
+        </form>
+        <p className="text-xs text-muted mt-2">
+          За замовчуванням створюються «Готівка» та «Перерахунок на рахунок» — під останню можна
+          додати назви рахунків, на які переказували.
+        </p>
+      </Card>
 
       <Card title={PUBLIC_PROCUREMENT_CATEGORY_NAME}>
         <Button type="button" onClick={() => setSupplierModalOpen(true)}>
@@ -191,17 +292,16 @@ export default function CategoriesPage() {
         {suppliers.length > 0 ? (
           <ul className="mt-4 divide-y divide-border">
             {suppliers.map((c) => (
-              <li key={c.id} className="flex items-center justify-between py-2 text-sm gap-2">
-                <span>
-                  {PUBLIC_PROCUREMENT_CATEGORY_NAME} → {c.name}
-                  {c.supplier?.location ? (
-                    <span className="text-muted"> · {c.supplier.location}</span>
-                  ) : null}
-                </span>
-                <Button variant="ghost" className="text-expense px-2 shrink-0" onClick={() => remove(c.id)}>
-                  Видалити
-                </Button>
-              </li>
+              <CategoryNameRow
+                key={c.id}
+                prefix={PUBLIC_PROCUREMENT_CATEGORY_NAME}
+                name={c.name}
+                suffix={
+                  c.supplier?.location ? ` · ${c.supplier.location}` : undefined
+                }
+                onSave={(newName) => rename(c, newName)}
+                onRemove={() => remove(c.id)}
+              />
             ))}
           </ul>
         ) : (
@@ -229,14 +329,13 @@ export default function CategoriesPage() {
         {employees.length > 0 ? (
           <ul className="mt-4 divide-y divide-border">
             {employees.map((c) => (
-              <li key={c.id} className="flex items-center justify-between py-2 text-sm">
-                <span>
-                  {SALARY_CATEGORY_NAME} → {c.name}
-                </span>
-                <Button variant="ghost" className="text-expense px-2" onClick={() => remove(c.id)}>
-                  Видалити
-                </Button>
-              </li>
+              <CategoryNameRow
+                key={c.id}
+                prefix={SALARY_CATEGORY_NAME}
+                name={c.name}
+                onSave={(newName) => rename(c, newName)}
+                onRemove={() => remove(c.id)}
+              />
             ))}
           </ul>
         ) : (
@@ -253,7 +352,7 @@ export default function CategoriesPage() {
             required
           >
             <option value="">Оберіть групу</option>
-            {roots.map((c) => (
+            {expenseRoots.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -278,7 +377,7 @@ export default function CategoriesPage() {
       <Card>
         <form onSubmit={submit} className="flex flex-col sm:flex-row gap-2">
           <Input
-            label="Нова категорія (верхній рівень)"
+            label="Нова категорія витрат (верхній рівень)"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="flex-1"
@@ -304,6 +403,7 @@ export default function CategoriesPage() {
                 categories={categories}
                 depth={0}
                 onRemove={remove}
+                onRename={rename}
               />
             ))}
           </ul>

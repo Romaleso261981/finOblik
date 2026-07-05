@@ -42,11 +42,15 @@ export interface SupplierProfile {
   phone: string;
 }
 
+export type CategoryScope = "expense" | "income";
+
 export interface Category {
   id: string;
   name: string;
   parentId: string | null;
   createdAt: Date;
+  /** Лише для кореневих категорій; за замовчуванням — витрата */
+  scope?: CategoryScope;
   supplier?: SupplierProfile;
 }
 
@@ -71,6 +75,8 @@ export interface TransactionFilters {
   accountId?: string;
   categoryId?: string;
   transferredBy?: string;
+  /** Пошук у описі витрати або коментарі */
+  descriptionSearch?: string;
   type?: TransactionType | "all";
 }
 

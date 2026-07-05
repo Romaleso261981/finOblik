@@ -15,5 +15,6 @@ export function countActiveFilters(
   if (filters.accountId) n += 1;
   if (filters.categoryId) n += 1;
   if (includeTransferredBy && filters.transferredBy?.trim()) n += 1;
+  if (filters.descriptionSearch?.trim()) n += 1;
   return n;
 }

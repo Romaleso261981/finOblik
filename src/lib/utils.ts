@@ -45,6 +45,11 @@ export function applyTransactionFilters(
     ) {
       return false;
     }
+    if (filters.descriptionSearch?.trim()) {
+      const q = filters.descriptionSearch.trim().toLowerCase();
+      const hay = `${t.description ?? ""} ${t.comment ?? ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
     if (filters.dateFrom) {
       const from = new Date(filters.dateFrom);
       from.setHours(0, 0, 0, 0);
@@ -97,4 +102,37 @@ export function expensesByCategory(
       total,
     }))
     .sort((a, b) => b.total - a.total);
+}
+
+/** Нарахування (надходження) та відрахування (витрати) по рахунках */
+export function accrualsDeductionsByAccount(
+  transactions: Transaction[],
+  accounts: { id: string; name: string }[]
+): {
+  accountId: string;
+  name: string;
+  accruals: number;
+  deductions: number;
+  difference: number;
+}[] {
+  return accounts
+    .map((a) => {
+      const rows = transactions.filter((t) => t.accountId === a.id);
+      const accruals = sumByType(rows, "income");
+      const deductions = sumByType(rows, "expense");
+      return {
+        accountId: a.id,
+        name: a.name,
+        accruals,
+        deductions,
+        difference: accruals - deductions,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "uk"));
+}
+
+export function accrualsDeductionsTotals(transactions: Transaction[]) {
+  const accruals = sumByType(transactions, "income");
+  const deductions = sumByType(transactions, "expense");
+  return { accruals, deductions, difference: accruals - deductions };
 }

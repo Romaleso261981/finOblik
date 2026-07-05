@@ -58,7 +58,7 @@ export default function ExpensesPage() {
     }
     setError(null);
     try {
-      await createCategory(orgId, newCategory);
+      await createCategory(orgId, newCategory, null, "expense");
       setNewCategory("");
       setMessage("Категорію додано");
     } catch (e) {
@@ -227,6 +227,7 @@ export default function ExpensesPage() {
             required
           />
           <CategoryPicker
+            mode="expense"
             categories={categories}
             parentCategoryId={parentCategoryId}
             subCategoryId={subCategoryId}

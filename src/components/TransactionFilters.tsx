@@ -3,7 +3,7 @@
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import type { Account, Category, TransactionFilters } from "@/types";
-import { formatCategoryPath, getRootCategories } from "@/lib/categories";
+import { formatCategoryPath, getRootCategories, categoryScopeOf } from "@/lib/categories";
 
 export function TransactionFiltersPanel({
   filters,
@@ -72,16 +72,28 @@ export function TransactionFiltersPanel({
         }
       >
         <option value="">Усі категорії</option>
-        {getRootCategories(categories).map((root) => (
+        {getRootCategories(categories, "expense").map((root) => (
           <option key={root.id} value={root.id}>
-            {root.name} (усі)
+            [Витрата] {root.name} (усі)
           </option>
         ))}
         {categories
-          .filter((c) => c.parentId)
+          .filter((c) => c.parentId && categoryScopeOf(categories, c.id) === "expense")
           .map((c) => (
             <option key={c.id} value={c.id}>
-              {formatCategoryPath(categories, c.id)}
+              [Витрата] {formatCategoryPath(categories, c.id)}
+            </option>
+          ))}
+        {getRootCategories(categories, "income").map((root) => (
+          <option key={`in-${root.id}`} value={root.id}>
+            [Надходження] {root.name} (усі)
+          </option>
+        ))}
+        {categories
+          .filter((c) => c.parentId && categoryScopeOf(categories, c.id) === "income")
+          .map((c) => (
+            <option key={c.id} value={c.id}>
+              [Надходження] {formatCategoryPath(categories, c.id)}
             </option>
           ))}
       </Select>
@@ -95,6 +107,14 @@ export function TransactionFiltersPanel({
           }
         />
       )}
+      <Input
+        label="Опис / коментар"
+        placeholder="Пошук у тексті операції..."
+        value={filters.descriptionSearch ?? ""}
+        onChange={(e) =>
+          onChange({ ...filters, descriptionSearch: e.target.value || undefined })
+        }
+      />
     </div>
   );
 }

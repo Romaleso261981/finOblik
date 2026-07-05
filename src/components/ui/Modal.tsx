@@ -28,12 +28,14 @@ export function Modal({
   title,
   onClose,
   children,
+  footer,
   sheet = false,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
+  footer?: ReactNode;
   sheet?: boolean;
 }) {
   useEffect(() => {
@@ -67,7 +69,11 @@ export function Modal({
         }`}
       >
         <div
-          className={`pointer-events-auto grid w-full max-w-lg grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-white shadow-xl border border-border ${
+          className={`pointer-events-auto grid w-full max-w-lg overflow-hidden bg-white shadow-xl border border-border ${
+            footer
+              ? "grid-rows-[auto_minmax(0,1fr)_auto]"
+              : "grid-rows-[auto_minmax(0,1fr)]"
+          } ${
             sheet
               ? "max-h-[min(85dvh,640px)] rounded-t-2xl sm:rounded-xl pb-[env(safe-area-inset-bottom)]"
               : "max-h-[min(calc(100dvh-2rem),640px)] rounded-xl"
@@ -85,9 +91,15 @@ export function Modal({
               ✕
             </Button>
           </div>
-          <div className="min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
+          <div
+            data-modal-scroll
+            className="min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+          >
             <div className="p-4">{children}</div>
           </div>
+          {footer ? (
+            <div className="shrink-0 border-t border-border bg-white p-4">{footer}</div>
+          ) : null}
         </div>
       </div>
     </div>,

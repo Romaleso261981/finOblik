@@ -7,21 +7,33 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import {
+  CategoryPicker,
+  resolveCategoryId,
+} from "@/components/CategoryPicker";
 import { createIncome } from "@/lib/firestore";
+import { incomeRootNeedsSubcategory } from "@/lib/categories";
 import { formatDateInput } from "@/lib/utils";
 import Link from "next/link";
 
 export default function IncomePage() {
   const { orgId, user } = useAuth();
-  const { accounts } = useOrgDataContext();
+  const { accounts, categories } = useOrgDataContext();
   const [date, setDate] = useState(formatDateInput(new Date()));
   const [amount, setAmount] = useState("");
   const [transferredBy, setTransferredBy] = useState("");
+  const [parentCategoryId, setParentCategoryId] = useState("");
+  const [subCategoryId, setSubCategoryId] = useState("");
   const [accountId, setAccountId] = useState("");
   const [comment, setComment] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const onParentCategoryChange = (id: string) => {
+    setParentCategoryId(id);
+    setSubCategoryId("");
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -34,11 +46,27 @@ export default function IncomePage() {
       if (!accountId) throw new Error("Оберіть рахунок");
       if (!transferredBy.trim()) throw new Error("Вкажіть, хто перекинув кошти");
       if (Number.isNaN(num) || num <= 0) throw new Error("Вкажіть коректну суму");
+
+      const categoryId = resolveCategoryId(
+        categories,
+        parentCategoryId,
+        subCategoryId,
+        "income"
+      );
+      if (
+        parentCategoryId &&
+        incomeRootNeedsSubcategory(categories, parentCategoryId) &&
+        !subCategoryId
+      ) {
+        throw new Error("Оберіть підкатегорію надходження");
+      }
+
       await createIncome(orgId, {
         date,
         amount: num,
         transferredBy,
         accountId,
+        categoryId: categoryId || undefined,
         comment,
         createdBy: user.uid,
       });
@@ -82,6 +110,14 @@ export default function IncomePage() {
             onChange={(e) => setAmount(e.target.value)}
             required
           />
+          <CategoryPicker
+            mode="income"
+            categories={categories}
+            parentCategoryId={parentCategoryId}
+            subCategoryId={subCategoryId}
+            onParentChange={onParentCategoryChange}
+            onSubChange={setSubCategoryId}
+          />
           <Input
             label="Хто перекинув кошти"
             value={transferredBy}
@@ -89,7 +125,7 @@ export default function IncomePage() {
             required
           />
           <Select
-            label="Рахунок"
+            label="На який рахунок"
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
             required
@@ -106,6 +142,13 @@ export default function IncomePage() {
             value={comment}
             onChange={(e) => setComment(e.target.value)}
           />
+          <p className="text-xs text-muted">
+            Категорії надходжень (готівка, перерахунок тощо) налаштовуються в розділі{" "}
+            <Link href="/categories" className="underline font-medium">
+              Категорії
+            </Link>
+            .
+          </p>
           {error && <p className="text-sm text-expense">{error}</p>}
           {message && <p className="text-sm text-income">{message}</p>}
           <Button type="submit" disabled={saving || accounts.length === 0}>

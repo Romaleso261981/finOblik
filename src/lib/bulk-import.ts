@@ -48,11 +48,12 @@ export async function bulkImportTransactions(
 
   for (const catName of uniqueCategories) {
     const key = catName.trim().toLowerCase();
-    if (!categoryMap.has(key)) {
-      const id = await createCategory(orgId, catName);
-      categoryMap.set(key, id);
-      categoriesCreated.push(catName);
-    }
+    if (categoryMap.has(key)) continue;
+    const sample = rows.find((r) => r.category === catName);
+    const scope = sample?.type === "income" ? "income" : "expense";
+    const id = await createCategory(orgId, catName, null, scope);
+    categoryMap.set(key, id);
+    categoriesCreated.push(catName);
   }
 
   let accountId = accountIdProp;
@@ -70,18 +71,19 @@ export async function bulkImportTransactions(
   let imported = 0;
   for (const row of rows) {
     const categoryId = categoryMap.get(row.category.trim().toLowerCase());
-    if (!categoryId) throw new Error(`Немає категорії: ${row.category}`);
 
     if (row.type === "income") {
       await createIncome(orgId, {
         date: row.date,
         amount: row.amount,
-        transferredBy: row.transferredBy ?? "—",
+        transferredBy: row.transferredBy ?? row.description ?? "—",
         accountId,
+        categoryId: categoryId ?? undefined,
         comment: row.comment,
         createdBy,
       });
     } else {
+      if (!categoryId) throw new Error(`Немає категорії: ${row.category}`);
       await createExpense(orgId, {
         date: row.date,
         amount: row.amount,

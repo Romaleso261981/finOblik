@@ -1,14 +1,25 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import {
+  CategoryPicker,
+  resolveCategoryId,
+  splitCategorySelection,
+} from "@/components/CategoryPicker";
 import { deleteTransaction, updateTransaction } from "@/lib/firestore";
 import { formatDate, formatDateInput, formatMoney } from "@/lib/utils";
-import { buildCategoryDisplayMap } from "@/lib/categories";
-import type { Account, Category, Transaction } from "@/types";
+import {
+  buildCategoryDisplayMap,
+  incomeRootNeedsSubcategory,
+  isPublicProcurementRootCategory,
+  isSalaryRootCategory,
+  rootNeedsSubcategory,
+} from "@/lib/categories";
+import type { Account, Category, Transaction, TransactionType } from "@/types";
 
 type SortColumn = "date" | "amount" | "account" | "category" | "description";
 type SortDirection = "asc" | "desc";
@@ -340,14 +351,12 @@ function TransactionDetailModal({
         />
         <DetailRow label="Сума" value={formatMoney(transaction.amount)} />
         <DetailRow label="Рахунок" value={accountMap[transaction.accountId] ?? "—"} />
-        {!isIncome && (
-          <DetailRow
-            label="Категорія"
-            value={
-              transaction.categoryId ? categoryMap[transaction.categoryId] ?? "—" : "—"
-            }
-          />
-        )}
+        <DetailRow
+          label="Категорія"
+          value={
+            transaction.categoryId ? categoryMap[transaction.categoryId] ?? "—" : "—"
+          }
+        />
         {isIncome ? (
           <DetailRow label="Хто перекинув" value={transaction.transferredBy ?? "—"} />
         ) : (
@@ -383,15 +392,44 @@ function EditTransactionModal({
   orgId: string;
   onClose: () => void;
 }) {
+  const initialCategory = useMemo(
+    () => splitCategorySelection(categories, transaction.categoryId ?? ""),
+    [categories, transaction.categoryId]
+  );
+
+  const [type, setType] = useState<TransactionType>(transaction.type);
   const [date, setDate] = useState(formatDateInput(transaction.date));
   const [amount, setAmount] = useState(String(transaction.amount));
   const [accountId, setAccountId] = useState(transaction.accountId);
   const [comment, setComment] = useState(transaction.comment ?? "");
   const [transferredBy, setTransferredBy] = useState(transaction.transferredBy ?? "");
-  const [categoryId, setCategoryId] = useState(transaction.categoryId ?? "");
+  const [parentCategoryId, setParentCategoryId] = useState(initialCategory.parentCategoryId);
+  const [subCategoryId, setSubCategoryId] = useState(initialCategory.subCategoryId);
   const [description, setDescription] = useState(transaction.description ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setType(transaction.type);
+    setDate(formatDateInput(transaction.date));
+    setAmount(String(transaction.amount));
+    setAccountId(transaction.accountId);
+    setComment(transaction.comment ?? "");
+    setTransferredBy(transaction.transferredBy ?? "");
+    setDescription(transaction.description ?? "");
+    const split = splitCategorySelection(categories, transaction.categoryId ?? "");
+    setParentCategoryId(split.parentCategoryId);
+    setSubCategoryId(split.subCategoryId);
+    requestAnimationFrame(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      dialog?.querySelector("[data-modal-scroll]")?.scrollTo({ top: 0 });
+    });
+  }, [transaction, categories]);
+
+  const onParentCategoryChange = (id: string) => {
+    setParentCategoryId(id);
+    setSubCategoryId("");
+  };
 
   const save = async () => {
     setSaving(true);
@@ -399,15 +437,66 @@ function EditTransactionModal({
     try {
       const num = parseFloat(amount);
       if (Number.isNaN(num) || num <= 0) throw new Error("Вкажіть коректну суму");
-      await updateTransaction(orgId, transaction.id, {
-        date,
-        amount: num,
-        accountId,
-        comment,
-        ...(transaction.type === "income"
-          ? { transferredBy }
-          : { categoryId, description }),
-      });
+
+      if (type === "expense") {
+        const categoryId = resolveCategoryId(
+          categories,
+          parentCategoryId,
+          subCategoryId,
+          "expense"
+        );
+        if (rootNeedsSubcategory(categories, parentCategoryId) && !subCategoryId) {
+          if (isSalaryRootCategory(categories, parentCategoryId)) {
+            throw new Error("Оберіть категорію працівника");
+          }
+          if (isPublicProcurementRootCategory(categories, parentCategoryId)) {
+            throw new Error("Оберіть постачальника");
+          }
+          throw new Error("Оберіть підкатегорію");
+        }
+        if (!categoryId) throw new Error("Оберіть категорію витрати");
+
+        let desc = description.trim();
+        if (!desc && isSalaryRootCategory(categories, parentCategoryId) && subCategoryId) {
+          const emp = categories.find((c) => c.id === subCategoryId);
+          desc = emp ? `Зарплата ${emp.name}` : "Зарплата";
+        }
+        if (!desc) throw new Error("Додайте опис витрати");
+
+        await updateTransaction(orgId, transaction.id, {
+          type: "expense",
+          date,
+          amount: num,
+          accountId,
+          comment,
+          categoryId,
+          description: desc,
+        });
+      } else {
+        const categoryId = resolveCategoryId(
+          categories,
+          parentCategoryId,
+          subCategoryId,
+          "income"
+        );
+        if (
+          parentCategoryId &&
+          incomeRootNeedsSubcategory(categories, parentCategoryId) &&
+          !subCategoryId
+        ) {
+          throw new Error("Оберіть підкатегорію надходження");
+        }
+
+        await updateTransaction(orgId, transaction.id, {
+          type: "income",
+          date,
+          amount: num,
+          accountId,
+          comment,
+          transferredBy: transferredBy.trim(),
+          categoryId: categoryId || "",
+        });
+      }
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Помилка збереження");
@@ -417,8 +506,59 @@ function EditTransactionModal({
   };
 
   return (
-    <Modal open title="Редагувати операцію" onClose={onClose}>
+    <Modal
+      open
+      title="Редагувати операцію"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Скасувати
+          </Button>
+          <Button onClick={save} disabled={saving}>
+            {saving ? "Збереження..." : "Зберегти"}
+          </Button>
+        </div>
+      }
+    >
       <div className="space-y-3">
+        <Select
+          label="Тип операції"
+          value={type}
+          onChange={(e) => {
+            const next = e.target.value as TransactionType;
+            if (next === "expense" && type === "income") {
+              if (!description.trim() && transferredBy.trim()) {
+                setDescription(transferredBy.trim());
+              }
+            }
+            setType(next);
+          }}
+        >
+          <option value="income">Надходження</option>
+          <option value="expense">Витрата</option>
+        </Select>
+
+        {type === "income" ? (
+          <CategoryPicker
+            mode="income"
+            categories={categories}
+            parentCategoryId={parentCategoryId}
+            subCategoryId={subCategoryId}
+            onParentChange={onParentCategoryChange}
+            onSubChange={setSubCategoryId}
+          />
+        ) : (
+          <CategoryPicker
+            mode="expense"
+            categories={categories}
+            parentCategoryId={parentCategoryId}
+            subCategoryId={subCategoryId}
+            onParentChange={onParentCategoryChange}
+            onSubChange={setSubCategoryId}
+          />
+        )}
+
         <Input label="Дата" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         <Input
           label="Сума"
@@ -435,31 +575,19 @@ function EditTransactionModal({
             </option>
           ))}
         </Select>
-        {transaction.type === "income" ? (
+        {type === "income" ? (
           <Input
             label="Хто перекинув"
             value={transferredBy}
             onChange={(e) => setTransferredBy(e.target.value)}
           />
         ) : (
-          <>
-            <Select
-              label="Категорія"
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {buildCategoryDisplayMap(categories)[c.id]}
-                </option>
-              ))}
-            </Select>
-            <Input
-              label="Опис"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </>
+          <Input
+            label="Опис"
+            placeholder="Можна залишити порожнім для зарплати"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
         )}
         <Input
           label="Коментар"
@@ -467,14 +595,6 @@ function EditTransactionModal({
           onChange={(e) => setComment(e.target.value)}
         />
         {error && <p className="text-sm text-expense">{error}</p>}
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose}>
-            Скасувати
-          </Button>
-          <Button onClick={save} disabled={saving}>
-            {saving ? "Збереження..." : "Зберегти"}
-          </Button>
-        </div>
       </div>
     </Modal>
   );

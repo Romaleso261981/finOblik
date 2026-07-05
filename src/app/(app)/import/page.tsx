@@ -11,6 +11,11 @@ import {
   LEGACY_NOTES_IMPORT,
   type LegacyImportRow,
 } from "@/data/legacy-notes-import";
+import {
+  MISHA_PROJECTANT_ACCOUNT_NAME,
+  MISHA_PROJECTANT_INCOMES,
+  MISHA_PROJECTANT_INCOMES_TOTAL,
+} from "@/data/misha-projectant-incomes";
 import { bulkImportTransactions, parseImportJson } from "@/lib/bulk-import";
 import { formatDate, formatMoney } from "@/lib/utils";
 
@@ -28,18 +33,25 @@ export default function ImportPage() {
   const preview = LEGACY_NOTES_IMPORT;
   const reviewRows = useMemo(() => preview.filter((r) => r.needsReview), [preview]);
 
-  const runImport = async (rows: LegacyImportRow[]) => {
+  const runImport = async (
+    rows: LegacyImportRow[],
+    opts?: { accountName?: string; accountId?: string }
+  ) => {
     if (!orgId || !user) return;
     setRunning(true);
     setError(null);
     setStatus(null);
     setProgress(null);
     try {
+      const name = opts?.accountName ?? accountName;
+      const accId =
+        opts?.accountId ??
+        (customAccountId || undefined);
       const result = await bulkImportTransactions({
         orgId,
         createdBy: user.uid,
-        accountId: customAccountId || undefined,
-        accountName,
+        accountId: accId,
+        accountName: name,
         accounts,
         categories,
         rows,
@@ -47,7 +59,7 @@ export default function ImportPage() {
       });
 
       const parts = [`Імпортовано ${result.imported} операцій.`];
-      if (result.accountCreated) parts.push(`Створено рахунок «${accountName}».`);
+      if (result.accountCreated) parts.push(`Створено рахунок «${name}».`);
       if (result.categoriesCreated.length) {
         parts.push(`Нові категорії: ${result.categoriesCreated.join(", ")}.`);
       }
@@ -60,6 +72,23 @@ export default function ImportPage() {
   };
 
   const importNotes = () => runImport(LEGACY_NOTES_IMPORT);
+
+  const mishaAccount = useMemo(
+    () =>
+      accounts.find(
+        (a) =>
+          a.name.localeCompare(MISHA_PROJECTANT_ACCOUNT_NAME, "uk", {
+            sensitivity: "accent",
+          }) === 0
+      ),
+    [accounts]
+  );
+
+  const importMishaIncomes = () =>
+    runImport(MISHA_PROJECTANT_INCOMES, {
+      accountName: MISHA_PROJECTANT_ACCOUNT_NAME,
+      accountId: mishaAccount?.id,
+    });
 
   const importJson = () => {
     try {
@@ -80,6 +109,44 @@ export default function ImportPage() {
           Перенесіть старі нотатки в Firestore одним натисканням
         </p>
       </header>
+
+      <Card title={`Нарахування: ${MISHA_PROJECTANT_ACCOUNT_NAME}`}>
+        <p className="text-sm text-slate-700 mb-3">
+          {MISHA_PROJECTANT_INCOMES.length} надходжень на суму{" "}
+          <strong className="text-income">{formatMoney(MISHA_PROJECTANT_INCOMES_TOTAL)}</strong>{" "}
+          (травень–липень 2026). Категорія: «Перерахунок на рахунок».
+        </p>
+        {mishaAccount ? (
+          <p className="text-xs text-muted mb-3">
+            Рахунок знайдено: <strong>{mishaAccount.name}</strong>
+          </p>
+        ) : (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">
+            Рахунок «{MISHA_PROJECTANT_ACCOUNT_NAME}» буде створено автоматично, якщо його ще немає.
+          </p>
+        )}
+        <div className="overflow-x-auto mb-4 max-h-48 overflow-y-auto rounded-lg border border-border">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 sticky top-0">
+              <tr className="text-left text-muted">
+                <th className="py-1.5 px-2">Дата</th>
+                <th className="py-1.5 px-2">Сума</th>
+              </tr>
+            </thead>
+            <tbody>
+              {MISHA_PROJECTANT_INCOMES.map((r, i) => (
+                <tr key={i} className="border-t border-border/50">
+                  <td className="py-1 px-2 whitespace-nowrap">{formatDate(new Date(r.date))}</td>
+                  <td className="py-1 px-2 text-income font-medium">{formatMoney(r.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <Button onClick={importMishaIncomes} disabled={running}>
+          {running ? "Імпорт..." : "Імпортувати нарахування"}
+        </Button>
+      </Card>
 
       <Card title="Ваші нотатки (вже розібрані)">
         <p className="text-sm text-slate-700 mb-3">
