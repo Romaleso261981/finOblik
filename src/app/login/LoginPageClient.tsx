@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { loadFromStorage, userScopedKey } from "@/lib/persistence";
 
 export default function LoginPageClient() {
   const { signIn, signUp, user, loading } = useAuth();
@@ -17,7 +18,9 @@ export default function LoginPageClient() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) router.replace("/dashboard");
+    if (loading || !user) return;
+    const lastPath = loadFromStorage<string>(userScopedKey(user.uid, "lastPath"));
+    router.replace(lastPath || "/dashboard");
   }, [loading, user, router]);
 
   const submit = async (e: FormEvent) => {
@@ -27,7 +30,7 @@ export default function LoginPageClient() {
     try {
       if (mode === "login") await signIn(email, password);
       else await signUp(email, password);
-      router.replace("/dashboard");
+      // redirect happens in the auth state effect (preserves last page)
     } catch {
       setError(
         mode === "login"

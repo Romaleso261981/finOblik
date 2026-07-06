@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrgDataContext } from "@/contexts/OrgDataContext";
 import { usePageHeaderActions } from "@/contexts/PageHeaderContext";
@@ -17,12 +17,25 @@ import {
 import { AccrualsDeductionsSummary } from "@/components/AccrualsDeductionsSummary";
 import { buildCategoryDisplayMap } from "@/lib/categories";
 import { DEFAULT_TRANSACTION_FILTERS } from "@/lib/transaction-filters";
+import { loadFromStorage, saveToStorage, userScopedKey } from "@/lib/persistence";
 import type { TransactionFilters } from "@/types";
 
 export default function DashboardPage() {
-  const { orgId } = useAuth();
+  const { orgId, user } = useAuth();
   const { accounts, categories, transactions, loading } = useOrgDataContext();
   const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_TRANSACTION_FILTERS);
+
+  useEffect(() => {
+    if (!user) return;
+    const stored = loadFromStorage<TransactionFilters>(userScopedKey(user.uid, "filters.dashboard"));
+    if (stored) setFilters({ ...DEFAULT_TRANSACTION_FILTERS, ...stored });
+  }, [user]);
+
+  const setFiltersPersisted = useCallback((next: TransactionFilters) => {
+    setFilters(next);
+    if (!user) return;
+    saveToStorage(userScopedKey(user.uid, "filters.dashboard"), next);
+  }, [user]);
 
   const filtered = useMemo(
     () => applyTransactionFilters(transactions, filters, categories),
@@ -55,12 +68,12 @@ export default function DashboardPage() {
     () => (
       <TransactionFiltersTrigger
         filters={filters}
-        onApply={setFilters}
+        onApply={setFiltersPersisted}
         accounts={accounts}
         categories={categories}
       />
     ),
-    [filters, accounts, categories]
+    [filters, setFiltersPersisted, accounts, categories]
   );
 
   usePageHeaderActions(headerFilters);

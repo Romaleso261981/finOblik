@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { OrgDataProvider, useOrgDataContext } from "@/contexts/OrgDataContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/Button";
+import { saveToStorage, userScopedKey } from "@/lib/persistence";
 
 function StatusBanners() {
   const { orgId, profileError, refreshProfile } = useAuth();
@@ -60,12 +61,20 @@ function AppShellWithBanners({
 export default function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/login");
     }
   }, [loading, user, router]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (!pathname) return;
+    if (pathname === "/login") return;
+    saveToStorage(userScopedKey(user.uid, "lastPath"), pathname);
+  }, [pathname, user]);
 
   if (loading) {
     return (

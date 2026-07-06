@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrgDataContext } from "@/contexts/OrgDataContext";
 import { Card } from "@/components/ui/Card";
@@ -12,14 +12,27 @@ import { OperationsTable } from "@/components/OperationsTable";
 import { downloadStatementPdf } from "@/lib/export-statement-pdf";
 import { accrualsDeductionsTotals, applyTransactionFilters } from "@/lib/utils";
 import { DEFAULT_TRANSACTION_FILTERS } from "@/lib/transaction-filters";
+import { loadFromStorage, saveToStorage, userScopedKey } from "@/lib/persistence";
 import type { TransactionFilters } from "@/types";
 
 export default function OperationsPage() {
-  const { orgId } = useAuth();
+  const { orgId, user } = useAuth();
   const { accounts, categories, transactions, loading } = useOrgDataContext();
   const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_TRANSACTION_FILTERS);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const stored = loadFromStorage<TransactionFilters>(userScopedKey(user.uid, "filters.operations"));
+    if (stored) setFilters({ ...DEFAULT_TRANSACTION_FILTERS, ...stored });
+  }, [user]);
+
+  const setFiltersPersisted = useCallback((next: TransactionFilters) => {
+    setFilters(next);
+    if (!user) return;
+    saveToStorage(userScopedKey(user.uid, "filters.operations"), next);
+  }, [user]);
 
   const filtered = useMemo(
     () => applyTransactionFilters(transactions, filters, categories),
@@ -59,7 +72,7 @@ export default function OperationsPage() {
         </Button>
         <TransactionFiltersTrigger
           filters={filters}
-          onApply={setFilters}
+          onApply={setFiltersPersisted}
           accounts={accounts}
           categories={categories}
         />
@@ -74,7 +87,7 @@ export default function OperationsPage() {
     <Card title={`Операції (${filtered.length})`} action={filterTrigger}>
       <ActiveTransactionFilters
         filters={filters}
-        onChange={setFilters}
+        onChange={setFiltersPersisted}
         accounts={accounts}
         categories={categories}
       />
