@@ -18,7 +18,7 @@ import {
 } from "./firebase";
 import { mapDoc, timestampToDate, type Account, type Category, type CategoryScope, type SupplierProfile, type Transaction, type TransactionType } from "@/types";
 import { supplierDisplayName } from "@/lib/categories";
-import { computeIncomeTaxAmount, incomeAccruesTax, incomeTaxDescription } from "@/lib/income-tax";
+import { computeIncomeTaxAmount, incomeAccruesTax, incomeTaxDescriptionForIncome } from "@/lib/income-tax";
 
 function mapAccount(snap: Parameters<typeof mapDoc<Account>>[0]): Account {
   return mapDoc(snap, (data) => ({
@@ -237,7 +237,11 @@ export async function createIncome(
       date: Timestamp.fromDate(new Date(input.date)),
       amount: taxAmount,
       categoryId: taxCategoryId,
-      description: incomeTaxDescription(),
+      description: incomeTaxDescriptionForIncome({
+        grossAmount: input.amount,
+        transferredBy: input.transferredBy,
+        workDate: input.date,
+      }),
       accountId: input.accountId,
       comment: null,
       linkedIncomeId: incomeRef.id,
@@ -317,7 +321,13 @@ export async function updateTransaction(
 export async function syncIncomeTaxExpense(
   orgId: string,
   income: Transaction,
-  patch: { date: string; amount: number; accountId: string; categoryId?: string },
+  patch: {
+    date: string;
+    amount: number;
+    accountId: string;
+    categoryId?: string;
+    transferredBy?: string;
+  },
   taxCategoryId: string,
   categories: Category[],
   createdBy: string
@@ -327,6 +337,11 @@ export async function syncIncomeTaxExpense(
   const taxAmount = shouldTax ? computeIncomeTaxAmount(patch.amount) : 0;
   const dateTs = Timestamp.fromDate(new Date(patch.date));
   const now = serverTimestamp();
+  const taxDescription = incomeTaxDescriptionForIncome({
+    grossAmount: patch.amount,
+    transferredBy: patch.transferredBy ?? income.transferredBy,
+    workDate: patch.date,
+  });
 
   if (taxAmount <= 0) {
     if (income.taxExpenseId) {
@@ -346,6 +361,7 @@ export async function syncIncomeTaxExpense(
       date: dateTs,
       amount: taxAmount,
       accountId: patch.accountId,
+      description: taxDescription,
       updatedAt: now,
     });
     return;
@@ -356,7 +372,7 @@ export async function syncIncomeTaxExpense(
     date: dateTs,
     amount: taxAmount,
     categoryId: taxCategoryId,
-    description: incomeTaxDescription(),
+    description: taxDescription,
     accountId: patch.accountId,
     comment: null,
     linkedIncomeId: income.id,
@@ -398,7 +414,11 @@ export async function backfillIncomeTaxes(
       date: Timestamp.fromDate(income.date),
       amount: taxAmount,
       categoryId: taxCategoryId,
-      description: incomeTaxDescription(),
+      description: incomeTaxDescriptionForIncome({
+        grossAmount: income.amount,
+        transferredBy: income.transferredBy,
+        workDate: income.date,
+      }),
       accountId: income.accountId,
       comment: null,
       linkedIncomeId: income.id,
