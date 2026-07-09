@@ -521,8 +521,9 @@ function EditTransactionModal({
             taxExpenseId:
               transaction.type === "income" ? transaction.taxExpenseId : undefined,
           },
-          { date, amount: num, accountId },
+          { date, amount: num, accountId, categoryId: categoryId || undefined },
           taxCategoryId,
+          categories,
           transaction.createdBy
         );
       }

@@ -60,30 +60,14 @@ export function getSupplierCategories(categories: Category[]): Category[] {
 }
 
 /**
- * Варіанти для поля підкатегорії у витратах:
- * для звичайних груп (напр. «Кондиціонери») — підкатегорії + постачальники з довідника.
+ * Варіанти для поля підкатегорії у витратах — лише дочірні категорії обраного кореня.
+ * Постачальники показуються тільки під «Публічна закупка», працівники — під «Зарплата».
  */
 export function getExpenseSubcategoryOptions(
   categories: Category[],
   parentCategoryId: string
 ): Category[] {
-  if (isSalaryRootCategory(categories, parentCategoryId)) {
-    return getChildCategories(categories, parentCategoryId);
-  }
-  if (isPublicProcurementRootCategory(categories, parentCategoryId)) {
-    return getChildCategories(categories, parentCategoryId);
-  }
-
-  const direct = getChildCategories(categories, parentCategoryId);
-  const suppliers = getSupplierCategories(categories);
-  if (suppliers.length === 0) return direct;
-
-  const seen = new Set(direct.map((c) => c.id));
-  const merged = [...direct];
-  for (const s of suppliers) {
-    if (!seen.has(s.id)) merged.push(s);
-  }
-  return merged.sort((a, b) => a.name.localeCompare(b.name, "uk"));
+  return getChildCategories(categories, parentCategoryId);
 }
 
 export function findCategoryByName(

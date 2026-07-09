@@ -19,6 +19,7 @@ import {
 import { bulkImportTransactions, parseImportJson } from "@/lib/bulk-import";
 import { backfillIncomeTaxes } from "@/lib/firestore";
 import { ensureDefaultIncomeTaxCategory } from "@/lib/ensure-default-categories";
+import { incomeAccruesTax } from "@/lib/income-tax";
 import { formatDate, formatMoney } from "@/lib/utils";
 
 export default function ImportPage() {
@@ -110,10 +111,11 @@ export default function ImportPage() {
     return transactions.filter(
       (t) =>
         t.type === "income" &&
+        incomeAccruesTax(categories, t.categoryId) &&
         !t.taxExpenseId &&
         !linked.has(t.id)
     ).length;
-  }, [transactions]);
+  }, [transactions, categories]);
 
   const backfillTaxes = async () => {
     if (!orgId || !user) return;
@@ -126,6 +128,7 @@ export default function ImportPage() {
         orgId,
         transactions,
         taxCategoryId,
+        categories,
         user.uid
       );
       setStatus(
@@ -153,15 +156,16 @@ export default function ImportPage() {
 
       <Card title="Податок 7% від нарахувань">
         <p className="text-sm text-slate-700 mb-3">
-          Для кожного нарахування автоматично створюється витрата 7% у категорії «Податки (7%)».
-          Нові надходження вже отримують податок; для старих записів натисніть кнопку нижче.
+          Для надходжень категорії «Перерахунок на рахунок» автоматично створюється витрата 7% у
+          «Податки (7%)». Готівка та інші категорії — без податку. Для старих перерахувань без
+          податку натисніть кнопку нижче.
         </p>
         {incomesMissingTax > 0 ? (
           <p className="text-xs text-amber-800 mb-3">
-            Нарахувань без податкової витрати: <strong>{incomesMissingTax}</strong>
+            Нарахувань «Перерахунок на рахунок» без податку: <strong>{incomesMissingTax}</strong>
           </p>
         ) : (
-          <p className="text-xs text-muted mb-3">Податок проставлено для всіх нарахувань.</p>
+          <p className="text-xs text-muted mb-3">Податок проставлено для усіх перерахувань на рахунок.</p>
         )}
         <Button variant="secondary" onClick={backfillTaxes} disabled={running || incomesMissingTax === 0}>
           {running ? "Обробка..." : "Додати 7% до нарахувань без податку"}

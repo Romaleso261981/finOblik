@@ -84,7 +84,7 @@ export async function bulkImportTransactions(
         categoryId: categoryId ?? undefined,
         comment: row.comment,
         createdBy,
-      }, taxCategoryId);
+      }, taxCategoryId, categories);
     } else {
       if (!categoryId) throw new Error(`Немає категорії: ${row.category}`);
       await createExpense(orgId, {

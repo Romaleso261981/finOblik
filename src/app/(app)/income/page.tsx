@@ -13,6 +13,7 @@ import {
 } from "@/components/CategoryPicker";
 import { createIncome } from "@/lib/firestore";
 import { ensureDefaultIncomeTaxCategory } from "@/lib/ensure-default-categories";
+import { incomeAccruesTax } from "@/lib/income-tax";
 import { incomeRootNeedsSubcategory } from "@/lib/categories";
 import { formatDateInput } from "@/lib/utils";
 import Link from "next/link";
@@ -72,11 +73,15 @@ export default function IncomePage() {
         categoryId: categoryId || undefined,
         comment,
         createdBy: user.uid,
-      }, taxCategoryId);
+      }, taxCategoryId, categories);
       setAmount("");
       setTransferredBy("");
       setComment("");
-      setMessage("Надходження збережено (додано витрату 7% податку)");
+      setMessage(
+        incomeAccruesTax(categories, categoryId || undefined)
+          ? "Надходження збережено (додано витрату 7% податку)"
+          : "Надходження збережено"
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Помилка");
     } finally {
@@ -121,6 +126,9 @@ export default function IncomePage() {
             onParentChange={onParentCategoryChange}
             onSubChange={setSubCategoryId}
           />
+          <p className="text-xs text-muted -mt-2">
+            Податок 7% нараховується лише для категорії «Перерахунок на рахунок», не для «Готівка».
+          </p>
           <Input
             label="Хто перекинув кошти"
             value={transferredBy}

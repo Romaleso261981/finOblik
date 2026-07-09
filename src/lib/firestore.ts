@@ -18,7 +18,7 @@ import {
 } from "./firebase";
 import { mapDoc, timestampToDate, type Account, type Category, type CategoryScope, type SupplierProfile, type Transaction, type TransactionType } from "@/types";
 import { supplierDisplayName } from "@/lib/categories";
-import { computeIncomeTaxAmount, incomeTaxDescription } from "@/lib/income-tax";
+import { computeIncomeTaxAmount, incomeAccruesTax, incomeTaxDescription } from "@/lib/income-tax";
 
 function mapAccount(snap: Parameters<typeof mapDoc<Account>>[0]): Account {
   return mapDoc(snap, (data) => ({
@@ -212,7 +212,8 @@ export type ExpenseInput = {
 export async function createIncome(
   orgId: string,
   input: IncomeInput,
-  taxCategoryId: string
+  taxCategoryId: string,
+  categories: Category[]
 ): Promise<string> {
   const now = serverTimestamp();
   const incomeRef = await addDoc(collection(getFirebaseDb(), transactionsCollection(orgId)), {
@@ -228,7 +229,8 @@ export async function createIncome(
     updatedAt: now,
   });
 
-  const taxAmount = computeIncomeTaxAmount(input.amount);
+  const shouldTax = incomeAccruesTax(categories, input.categoryId);
+  const taxAmount = shouldTax ? computeIncomeTaxAmount(input.amount) : 0;
   if (taxAmount > 0) {
     const expenseRef = await addDoc(collection(getFirebaseDb(), transactionsCollection(orgId)), {
       type: "expense",
@@ -315,11 +317,14 @@ export async function updateTransaction(
 export async function syncIncomeTaxExpense(
   orgId: string,
   income: Transaction,
-  patch: { date: string; amount: number; accountId: string },
+  patch: { date: string; amount: number; accountId: string; categoryId?: string },
   taxCategoryId: string,
+  categories: Category[],
   createdBy: string
 ) {
-  const taxAmount = computeIncomeTaxAmount(patch.amount);
+  const categoryId = patch.categoryId ?? income.categoryId;
+  const shouldTax = incomeAccruesTax(categories, categoryId);
+  const taxAmount = shouldTax ? computeIncomeTaxAmount(patch.amount) : 0;
   const dateTs = Timestamp.fromDate(new Date(patch.date));
   const now = serverTimestamp();
 
@@ -369,6 +374,7 @@ export async function backfillIncomeTaxes(
   orgId: string,
   transactions: Transaction[],
   taxCategoryId: string,
+  categories: Category[],
   createdBy: string
 ): Promise<number> {
   const linkedIncomeIds = new Set(
@@ -381,6 +387,7 @@ export async function backfillIncomeTaxes(
   for (const income of transactions) {
     if (income.type !== "income") continue;
     if (income.taxExpenseId || linkedIncomeIds.has(income.id)) continue;
+    if (!incomeAccruesTax(categories, income.categoryId)) continue;
 
     const taxAmount = computeIncomeTaxAmount(income.amount);
     if (taxAmount <= 0) continue;
