@@ -15,8 +15,9 @@ import {
   categoriesCollection,
   getFirebaseDb,
   transactionsCollection,
+  workHoursCollection,
 } from "./firebase";
-import { mapDoc, timestampToDate, type Account, type Category, type CategoryScope, type SupplierProfile, type Transaction, type TransactionType } from "@/types";
+import { mapDoc, timestampToDate, type Account, type Category, type CategoryScope, type SupplierProfile, type Transaction, type TransactionType, type WorkHoursEntry } from "@/types";
 import { supplierDisplayName } from "@/lib/categories";
 import { computeIncomeTaxAmount, incomeAccruesTax, incomeTaxDescriptionForIncome } from "@/lib/income-tax";
 
@@ -442,4 +443,75 @@ export async function deleteTransaction(orgId: string, transaction: Transaction)
     );
   }
   await deleteDoc(doc(getFirebaseDb(), transactionsCollection(orgId), transaction.id));
+}
+
+function mapWorkHoursEntry(snap: Parameters<typeof mapDoc<WorkHoursEntry>>[0]): WorkHoursEntry {
+  return mapDoc(snap, (data) => ({
+    employeeCategoryId: String(data.employeeCategoryId),
+    workDate: String(data.workDate),
+    hours: Number(data.hours),
+    comment: (data.comment as string | undefined) ?? undefined,
+    createdBy: String(data.createdBy),
+    createdAt: timestampToDate(data.createdAt),
+    updatedAt: timestampToDate(data.updatedAt),
+  }));
+}
+
+export function subscribeWorkHours(
+  orgId: string,
+  onData: (entries: WorkHoursEntry[]) => void,
+  onError?: (e: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    collection(getFirebaseDb(), workHoursCollection(orgId)),
+    (snap) => {
+      const items = snap.docs.map(mapWorkHoursEntry);
+      items.sort((a, b) => {
+        const d = b.workDate.localeCompare(a.workDate);
+        if (d !== 0) return d;
+        return b.updatedAt.getTime() - a.updatedAt.getTime();
+      });
+      onData(items);
+    },
+    (err) => onError?.(err)
+  );
+}
+
+export type WorkHoursInput = {
+  employeeCategoryId: string;
+  workDate: string;
+  hours: number;
+  comment?: string;
+  createdBy: string;
+};
+
+export async function createWorkHoursEntry(orgId: string, input: WorkHoursInput): Promise<string> {
+  const now = serverTimestamp();
+  const ref = await addDoc(collection(getFirebaseDb(), workHoursCollection(orgId)), {
+    employeeCategoryId: input.employeeCategoryId,
+    workDate: input.workDate,
+    hours: input.hours,
+    comment: input.comment?.trim() || null,
+    createdBy: input.createdBy,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return ref.id;
+}
+
+export async function updateWorkHoursEntry(
+  orgId: string,
+  entryId: string,
+  patch: Partial<Pick<WorkHoursInput, "employeeCategoryId" | "workDate" | "hours" | "comment">>
+) {
+  const data: Record<string, unknown> = { updatedAt: serverTimestamp() };
+  if (patch.employeeCategoryId) data.employeeCategoryId = patch.employeeCategoryId;
+  if (patch.workDate) data.workDate = patch.workDate;
+  if (patch.hours !== undefined) data.hours = patch.hours;
+  if (patch.comment !== undefined) data.comment = patch.comment?.trim() || null;
+  await updateDoc(doc(getFirebaseDb(), workHoursCollection(orgId), entryId), data);
+}
+
+export async function deleteWorkHoursEntry(orgId: string, entryId: string) {
+  await deleteDoc(doc(getFirebaseDb(), workHoursCollection(orgId), entryId));
 }

@@ -51,6 +51,10 @@ export function transactionsCollection(orgId: string) {
   return `${orgPath(orgId)}/transactions`;
 }
 
+export function workHoursCollection(orgId: string) {
+  return `${orgPath(orgId)}/workHours`;
+}
+
 export function membersCollection(orgId: string) {
   return `${orgPath(orgId)}/members`;
 }

@@ -37,6 +37,10 @@ service cloud.firestore {
       match /transactions/{transactionId} {
         allow read, write: if isOrgMember(orgId);
       }
+
+      match /workHours/{entryId} {
+        allow read, write: if isOrgMember(orgId);
+      }
     }
   }
 }

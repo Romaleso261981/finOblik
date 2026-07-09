@@ -10,6 +10,7 @@ const nav = [
   { href: "/income", label: "Надходження" },
   { href: "/expenses", label: "Витрати" },
   { href: "/operations", label: "Всі операції" },
+  { href: "/hours", label: "Години" },
   { href: "/import", label: "Імпорт" },
   { href: "/categories", label: "Категорії" },
   { href: "/accounts", label: "Рахунки" },

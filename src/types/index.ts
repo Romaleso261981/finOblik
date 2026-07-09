@@ -84,6 +84,18 @@ export interface TransactionFilters {
   type?: TransactionType | "all";
 }
 
+export interface WorkHoursEntry {
+  id: string;
+  /** id підкатегорії працівника під «Зарплата» */
+  employeeCategoryId: string;
+  workDate: string;
+  hours: number;
+  comment?: string;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export function timestampToDate(value: Timestamp | Date | undefined): Date {
   if (!value) return new Date();
   if (value instanceof Date) return value;

@@ -89,6 +89,12 @@ export function findSalaryCategory(categories: Category[]): Category | undefined
   return findCategoryByName(categories, SALARY_CATEGORY_NAME, null, "expense");
 }
 
+export function getSalaryEmployeeCategories(categories: Category[]): Category[] {
+  const salary = findSalaryCategory(categories);
+  if (!salary) return [];
+  return getChildCategories(categories, salary.id);
+}
+
 export function findPublicProcurementCategory(categories: Category[]): Category | undefined {
   return findCategoryByName(categories, PUBLIC_PROCUREMENT_CATEGORY_NAME, null, "expense");
 }
